@@ -1,0 +1,50 @@
+---
+title: "Getting Started with Our API"
+description: "Welcome to our comprehensive API documentation. This guide will help you get up and running quickly."
+---
+
+<Warning>
+Our API has rate limits to ensure fair usage.
+</Warning>
+
+<Steps>
+  <Step title="Sign up for an account">
+  Sign up for an account
+  </Step>
+  <Step title="Get your API key from the dashboard">
+  Get your API key from the dashboard
+  </Step>
+  <Step title="Make your first request">
+  Make your first request
+  </Step>
+</Steps>
+
+<Note>
+**Note:** Keep your API key secure and never share it publicly.
+</Note>
+
+## Authentication
+
+Our API uses API key authentication. Include your key in the header:
+
+```bash
+curl -H "Authorization: Bearer YOUR_API_KEY" https://api.example.com/v1/users
+```
+
+* **Free tier**: 100 requests per hour
+* **Pro tier**: 1,000 requests per hour
+* **Enterprise**: Custom limits
+
+<Card title="Need help?" icon="help-circle">
+Contact our support team at support@example.com or check our FAQ.
+</Card>
+
+<Accordion title="Advanced Configuration">
+This section contains detailed configuration options that can be collapsed for better readability.
+
+You can configure various settings here:
+
+* **Base URL**: Customize the API base URL
+* **Timeout**: Set request timeout values
+* **Retry logic**: Configure automatic retries
+</Accordion>

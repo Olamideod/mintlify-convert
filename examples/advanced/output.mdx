@@ -1,0 +1,83 @@
+---
+title: "Advanced API Documentation"
+description: "This example demonstrates advanced component conversions and features."
+---
+
+## Authentication Methods
+
+### API Key Authentication
+
+Include your API key in the request header:
+
+<Tabs>
+  <Tab title="JavaScript">
+```javascript
+const response = await fetch('/api/users', {
+  headers: {
+    'Authorization': `Bearer ${API_KEY}`
+  }
+});
+```
+  </Tab>
+  <Tab title="Python">
+```python
+import requests
+
+headers = {'Authorization': f'Bearer {api_key}'}
+response = requests.get('/api/users', headers=headers)
+```
+  </Tab>
+</Tabs>
+
+### OAuth 2.0 Authentication
+
+For more secure applications, use OAuth 2.0:
+
+<Steps>
+  <Step title="Register your application">
+  Register your application
+  </Step>
+  <Step title="Obtain authorization code">
+  Obtain authorization code
+  </Step>
+  <Step title="Exchange code for access token">
+  Exchange code for access token
+  </Step>
+  <Step title="Use token in API requests">
+  Use token in API requests
+  </Step>
+</Steps>
+
+<Warning>
+Exceeding rate limits will result in temporary suspension.
+</Warning>
+
+* **Free tier**: 100 requests/hour
+* **Pro tier**: 1,000 requests/hour
+* **Enterprise**: Custom limits
+
+<Accordion title="Advanced Configuration">
+This section contains detailed configuration options.
+
+You can customize various aspects of the API integration:
+
+* **Base URL**: Set custom API endpoint
+* **Timeout**: Configure request timeouts
+* **Retry logic**: Set up automatic retries
+* **Logging**: Enable detailed request logging
+</Accordion>
+
+## Error Handling
+
+Our API returns standard HTTP status codes:
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Success |
+| 400 | Bad Request |
+| 401 | Unauthorized |
+| 429 | Rate Limited |
+
+<Warning>
+The v1 API will be discontinued on January 1, 2024.
+</Warning>

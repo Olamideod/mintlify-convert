@@ -1,0 +1,117 @@
+# Getting Started with Mintlify Convert
+
+Welcome to Mintlify Convert! This guide will help you get up and running quickly.
+
+## What is Mintlify Convert?
+
+Mintlify Convert is a powerful tool that transforms your existing MDX documentation into the Mintlify format. It automatically converts various markdown patterns into Mintlify's component system, making your documentation more interactive and visually appealing.
+
+## Key Features
+
+- **Automatic Component Conversion**: Converts blockquotes to Callouts, numbered lists to Steps, and more
+- **Asset Management**: Copies images and updates paths automatically
+- **Navigation Generation**: Creates mint.json files with proper structure
+- **Validation**: Checks for common MDX issues
+- **Batch Processing**: Convert entire documentation directories at once
+
+## Quick Installation
+
+### From PyPI (Recommended)
+
+```bash
+pip install mintlify-convert
+```
+
+### From Source
+
+```bash
+git clone https://github.com/yourusername/mintlify-convert.git
+cd mintlify-convert
+pip install -e .
+```
+
+## Your First Conversion
+
+Let's convert a simple documentation file:
+
+1. **Create a test file** (`test.mdx`):
+```markdown
+# My API Documentation
+
+Welcome to our API! This guide will help you get started.
+
+## Quick Start
+
+1. Sign up for an account
+2. Get your API key
+3. Make your first request
+
+> **Note:** Keep your API key secure.
+
+Need help?
+
+Contact us at support@example.com
+```
+
+2. **Run the conversion**:
+```bash
+mintlify-convert test.mdx -o converted.mdx
+```
+
+3. **Check the output** (`converted.mdx`):
+```mdx
+---
+title: "My API Documentation"
+description: "Welcome to our API! This guide will help you get started."
+---
+
+<Steps>
+  <Step title="Step 1">
+  Sign up for an account
+  </Step>
+  <Step title="Step 2">
+  Get your API key
+  </Step>
+  <Step title="Step 3">
+  Make your first request
+  </Step>
+</Steps>
+
+<Callout type="note">
+**Note:** Keep your API key secure.
+</Callout>
+
+<Card title="Need help?" icon="question">
+Contact us at support@example.com
+</Card>
+```
+
+## Converting a Full Documentation Site
+
+For larger projects, you can convert entire directories:
+
+```bash
+# Basic directory conversion
+mintlify-convert docs/ -o mintlify-docs/
+
+# With all features enabled
+mintlify-convert docs/ -o mintlify-docs/ \
+  --generate-mint-json \
+  --download-assets \
+  --validate \
+  --sort-pages \
+  --project-name "My API Documentation"
+```
+
+## Next Steps
+
+- Learn about [component mappings](component-mapping.md)
+- Explore [advanced configuration options](api-reference.md)
+- Check out [examples](../examples/) for more complex scenarios
+- Read about [troubleshooting common issues](troubleshooting.md)
+
+## Need Help?
+
+- 📧 Email: support@example.com
+- 💬 Discord: [Join our community](https://discord.gg/example)
+- 🐛 Issues: [GitHub Issues](https://github.com/yourusername/mintlify-convert/issues)

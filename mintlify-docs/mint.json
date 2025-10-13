@@ -1,0 +1,24 @@
+{
+  "name": "Documentation",
+  "logo": {
+    "dark": "/logo/dark.svg",
+    "light": "/logo/light.svg"
+  },
+  "favicon": "/favicon.svg",
+  "colors": {
+    "primary": "#0D9373",
+    "light": "#07C983",
+    "dark": "#0D9373"
+  },
+  "navigation": [
+    {
+      "group": "Documentation",
+      "pages": [
+        "api-reference",
+        "component-mapping",
+        "getting-started",
+        "troubleshooting"
+      ]
+    }
+  ]
+}

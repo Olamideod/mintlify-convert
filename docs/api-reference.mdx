@@ -1,0 +1,143 @@
+# API Reference
+
+This document provides detailed information about Mintlify Convert's command-line interface and configuration options.
+
+## Command Line Interface
+
+### Basic Usage
+
+```bash
+mintlify-convert INPUT [OPTIONS]
+```
+
+### Arguments
+
+- `INPUT`: Input MDX file or directory to convert
+
+### Options
+
+#### Output Options
+
+| Option | Description | Example |
+|--------|-------------|---------|
+| `-o, --output` | Output file or directory | `-o converted.mdx` |
+
+#### Frontmatter Options
+
+| Option | Description | Example |
+|--------|-------------|---------|
+| `--icon` | Icon for frontmatter | `--icon "shield"` |
+| `--mode` | Mode for frontmatter | `--mode "wide"` |
+
+#### Processing Options
+
+| Option | Description |
+|--------|-------------|
+| `--download-assets` | Copy image assets to /images directory |
+| `--validate` | Validate MDX output and report errors |
+| `--use-ai-description` | Use AI to generate descriptions (requires OpenAI API key) |
+| `--verbose` | Show detailed error messages |
+
+#### Navigation Options
+
+| Option | Description | Example |
+|--------|-------------|---------|
+| `--generate-mint-json` | Generate mint.json navigation file | `--generate-mint-json` |
+| `--sort-pages` | Sort pages alphabetically within groups | `--sort-pages` |
+| `--project-name` | Project name for mint.json | `--project-name "My API Docs"` |
+
+#### Branding Options
+
+| Option | Description | Example |
+|--------|-------------|---------|
+| `--primary-color` | Primary brand color | `--primary-color "#FF6B6B"` |
+| `--light-color` | Light brand color | `--light-color "#FFE66D"` |
+| `--dark-color` | Dark brand color | `--dark-color "#4ECDC4"` |
+| `--support-url` | Support URL for topbar | `--support-url "https://support.example.com"` |
+| `--dashboard-url` | Dashboard URL for CTA button | `--dashboard-url "https://dashboard.example.com"` |
+| `--twitter` | Twitter URL | `--twitter "https://twitter.com/example"` |
+| `--github` | GitHub URL | `--github "https://github.com/example"` |
+| `--linkedin` | LinkedIn URL | `--linkedin "https://linkedin.com/company/example"` |
+
+## Examples
+
+### Single File Conversion
+
+```bash
+mintlify-convert docs/intro.mdx -o mintlify-docs/intro.mdx
+```
+
+### Directory Conversion with Assets
+
+```bash
+mintlify-convert docs/ -o mintlify-docs/ --download-assets
+```
+
+### Full Migration with Custom Branding
+
+```bash
+mintlify-convert docs/ -o mintlify-docs/ \
+  --generate-mint-json \
+  --download-assets \
+  --validate \
+  --sort-pages \
+  --project-name "Acme API Documentation" \
+  --primary-color "#FF6B6B" \
+  --light-color "#FFE66D" \
+  --dark-color "#4ECDC4" \
+  --support-url "https://support.acme.com" \
+  --dashboard-url "https://dashboard.acme.com" \
+  --github "https://github.com/acme/api"
+```
+
+### Validation Only
+
+```bash
+mintlify-convert docs/ -o mintlify-docs/ --validate --verbose
+```
+
+## Environment Variables
+
+You can set these environment variables to configure default behavior:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `MINTLIFY_CONVERT_ASSETS_DIR` | Custom assets directory name | `images` |
+| `MINTLIFY_CONVERT_STRICT_MODE` | Enable strict validation | `false` |
+| `OPENAI_API_KEY` | OpenAI API key for AI descriptions | None |
+
+## Programmatic Usage
+
+You can also use Mintlify Convert programmatically:
+
+```python
+from mintlify_convert import MintlifyConverter, process_directory
+from pathlib import Path
+
+# Create converter instance
+converter = MintlifyConverter(
+    output_dir=Path("output"),
+    download_assets=True
+)
+
+# Convert content
+content = "# My Title\n\nSome content"
+result = converter.convert(content, validate=True)
+
+# Process directory
+file_metadata = process_directory(
+    Path("docs"),
+    Path("output"),
+    validate=True,
+    generate_mint_json=True
+)
+```
+
+## Error Codes
+
+| Code | Description |
+|------|-------------|
+| 0 | Success |
+| 1 | General error (file not found, permission denied, etc.) |
+| 2 | Validation errors found |
+| 3 | No MDX files found in directory |

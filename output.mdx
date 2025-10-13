@@ -1,142 +1,243 @@
 ---
-title: "Getting Started with Mintlify Convert"
-description: "Welcome to Mintlify Convert! This guide will help you get up and running quickly."
+title: "Replace your token here"
+description: "--- title: \"Plotting data using Jupyter Notebooks\" description: \"In this tutorial, we will go through the steps necessary to create a Jupyter Notebook, and use it to plot data fetched using the Tracki..."
 ---
 
-Welcome to Mintlify Convert! This guide will help you get up and running quickly.
-
-## What is Mintlify Convert?
-
-Mintlify Convert is a powerful tool that transforms your existing MDX documentation into the Mintlify format. It automatically converts various markdown patterns into Mintlify's component system, making your documentation more interactive and visually appealing.
-
-## Key Features
-
-- **Automatic Component Conversion**: Converts blockquotes to Callouts, numbered lists to Steps, and more
-- **Asset Management**: Copies images and updates paths automatically
-- **Navigation Generation**: Creates mint.json files with proper structure
-- **Validation**: Checks for common MDX issues
-- **Batch Processing**: Convert entire documentation directories at once
-
-## Quick Installation
-
-### From PyPI (Recommended)
-
-```bash
-pip install mintlify-convert
-```
-
-### From Source
-
-```bash
-git clone https://github.com/yourusername/mintlify-convert.git
-cd mintlify-convert
-pip install -e .
-```
-
-## Your First Conversion
-
-Let's convert a simple documentation file:
-
-<Steps>
-  <Step title="Step 1">
-  **Create a test file** (`test.mdx`):
-```markdown
-# My API Documentation
-  </Step>
-</Steps>
-
-Welcome to our API! This guide will help you get started.
-
-## Quick Start
-
-<Steps>
-  <Step title="Step 1">
-  Sign up for an account
-  </Step>
-  <Step title="Step 2">
-  Get your API key
-  </Step>
-  <Step title="Step 3">
-  Make your first request
-  </Step>
-</Steps>
-
-<Callout type="note">
-**Note:** Keep your API key secure.
-</Callout>
-
-<Card title="Need help?" icon="question">
-  Contact us at support@example.com
-```
-</Card>
-
-<Steps>
-  <Step title="Step 1">
-  **Run the conversion**:
-```bash
-mintlify-convert test.mdx -o converted.mdx
-```
-  </Step>
-</Steps>
-
-<Steps>
-  <Step title="Step 1">
-  **Check the output** (`converted.mdx`):
-```mdx
 ---
-title: "My API Documentation"
-description: "Welcome to our API! This guide will help you get started."
+title: "Plotting data using Jupyter Notebooks"
+description: "In this tutorial, we will go through the steps necessary to create a Jupyter Notebook, and use it to plot data fetched using the Tracking History API."
 ---
-  </Step>
-</Steps>
 
-<Steps>
-  <Step title="Step 1">
-  Sign up for an account
-  </Step>
-  <Step title="Step 2">
-  Get your API key
-  </Step>
-  <Step title="Step 3">
-  Make your first request
-  </Step>
-</Steps>
+In this tutorial, we will go through the steps necessary to create a [Jupyter Notebook](https://jupyter.org), and use it to plot data fetched using the **Tracking History** API.
 
-<Callout type="note">
-**Note:** Keep your API key secure.
-</Callout>
+## Source code#
 
-<Card title="Need help?" icon="question">
-Contact us at support@example.com
-</Card>
-```
+[You can find the source code of the following tutorial here](https://github.com/spireglobal/aviation/tree/master/jupyter-notebooks/shanghai-airport).
 
-## Converting a Full Documentation Site
+[If you wish to see the final result of the tutorial, please head here](https://colab.research.google.com/github/spireglobal/aviation/blob/b118de8a65f88b1c11db7e6d90c2b22b4fe10873/jupyter-notebooks/shanghai-airport/Shanghai%20Airport%20-%20Data%20analysis.ipynb#scrollTo=pRB0hPaoUrO4).
 
-For larger projects, you can convert entire directories:
+## Jupyter Notebook installation#
 
-```bash
-# Basic directory conversion
-mintlify-convert docs/ -o mintlify-docs/
+#### Using Python#
 
-# With all features enabled
-mintlify-convert docs/ -o mintlify-docs/ \
-  --generate-mint-json \
-  --download-assets \
-  --validate \
-  --sort-pages \
-  --project-name "My API Documentation"
-```
+Let start by creating a new [Jupyter Notebook](https://jupyter.org). Here assume that you have Python installed on your machine. Let's start with upgrading `pip`:
 
-## Next Steps
+pip3 install \--upgrade pip
 
-- Learn about [component mappings](component-mapping.md)
-- Explore [advanced configuration options](api-reference.md)
-- Check out [examples](../examples/) for more complex scenarios
-- Read about [troubleshooting common issues](troubleshooting.md)
+Copy
 
-## Need Help?
+And then:
 
-- 📧 Email: support@example.com
-- 💬 Discord: [Join our community](https://discord.gg/example)
-- 🐛 Issues: [GitHub Issues](https://github.com/yourusername/mintlify-convert/issues)
+pip3 install jupyter
+
+Copy
+
+#### Using Anaconda#
+
+##### info
+
+For less experienced users, using Anaconda will be a simpler solution. 
+
+Anaconda will install both Python and Jupyter Notebook all at once. [To install Anaconda, simply head here](https://www.anaconda.com/products/individual) and download the program for your OS.
+
+### Creating your Notebook#
+#### Running Jupyter Notebook#
+
+Now that everything is installed, you can now simply run:
+
+jupyter notebook
+
+Copy
+
+Your browser will open up with the Jupyter Notebook interface, that looks like this:
+
+![Empty jupyter notebook](/images/jupyter-empty-c42c65ae0a6b7e4cbaafd3017c42637b.png)
+
+##### info
+
+You should run that command in a folder where you wish your Notebooks to be created.
+
+Now that your Jupyter interface is up and running you can simply create a new Notebook by clicking **New** and then **Python 3**. You are now ready!
+
+### Fetching data#
+First, we need to install a few dependencies for our Notebook to work properly. We will start by installing [requests](https://pypi.org/project/requests/), the package that will allow us to query the **Tracking History** API.
+
+pip install requests
+
+Copy
+
+In our Notebook, we can add a new _Cell_ and add the following:
+
+cell_1.py
+
+import requests
+
+response = requests.get(
+
+"https://api.airsafe.spire.com/v2/targets/history",
+
+params={
+
+"start": "2021-03-20T12:00:00Z",
+
+"end": "2021-03-20T14:30:00Z",
+
+"latitude_between": "31.02988460440661,31.36374539559339",
+
+"longitude_between": "121.1632295670742,121.52071043292581",
+
+},
+
+# Replace your token here
+
+headers={"Authorization": f"Bearer <your_api_token>"},
+
+)
+
+print(response)
+
+Copy
+
+Here, we are simply calling the API with the query parameters to get data around Shanghai (SHA), and printing the response we received. 
+
+If everything is set up correctly, you should see `<Response [200]>` appear as a result after running your Notebook.
+
+### Introduction to Pandas#
+[Pandas](https://pandas.pydata.org/) is a very useful Python data manipulation library that will save us some time when filtering, organizing and plotting our data after fetching it from the API.
+
+Let's install it so we can use it in our Notebook.
+
+  * Python
+  * Anaconda
+
+
+
+pip install pandas
+
+Copy
+
+conda install pandas
+
+Copy
+
+Now, we can update our _Cell_ and parse the `response` from the query, and create a new Panda Dataframe with the results:
+
+cell_1.py
+
+import requests
+
+import pandas as pd
+
+import json
+
+response = requests.get(
+
+"https://api.airsafe.spire.com/v2/targets/history",
+
+params={
+
+"start": "2021-03-20T12:00:00Z",
+
+"end": "2021-03-20T14:30:00Z",
+
+"latitude_between": "31.02988460440661,31.36374539559339",
+
+"longitude_between": "121.1632295670742,121.52071043292581",
+
+},
+
+headers={"Authorization": f"Bearer <your_api_token>"},
+
+)
+
+data = []
+
+for line in response.iter_lines(decode_unicode=True):
+
+if line and '"target":{' in line:
+
+data.append(json.loads(line)["target"])
+
+df = pd.DataFrame(data)
+
+Copy
+
+### Introduction to Plotly#
+For this example, we are gonna use [Plotly](https://plotly.com/) to plot the retrieved data points. However, you could also make this work with a number of other libraries, such as Matplotlib for example.
+
+  * Python
+  * Anaconda
+
+
+
+pip install plotly
+
+Copy
+
+conda install -c plotly plotly
+
+Copy
+
+Now, we can update our _Cell_ to plot our results on a map! Let's go over the changes:
+
+cell_1.py
+
+import requests
+
+import plotly.express as px
+
+import pandas as pd
+
+import json
+
+pd.options.plotting.backend = "plotly"
+
+response = requests.get(
+
+"https://api.airsafe.spire.com/v2/targets/history",
+
+params={
+
+"start": "2021-03-20T12:00:00Z",
+
+"end": "2021-03-20T14:30:00Z",
+
+"latitude_between": "31.02988460440661,31.36374539559339",
+
+"longitude_between": "121.1632295670742,121.52071043292581",
+
+},
+
+headers={"Authorization": f"Bearer <your_api_token>"},
+
+)
+
+data = []
+
+for line in response.iter_lines(decode_unicode=True):
+
+if line and '"target":{' in line:
+
+data.append(json.loads(line)["target"])
+
+df = pd.DataFrame(data)
+
+fig = px.scatter_mapbox(df, lat='latitude', lon='longitude', hover_data=['icao_address',"altitude_baro", "on_ground"], zoom=9,
+
+mapbox_style="carto-positron", color="icao_address")
+
+fig.show()
+
+Copy
+
+Here is a breakdown of the modifications we did here:
+
+  * We modified the default plotting library by modifying the default Plotly configuration.
+  * We created a Mapbox instance and filled in the parameters by defining the latitude and longitude fields name, as well as some other details such as the data appearing when hovering on a point.
+  * We display that instance
+
+
+
+It should now look something like that:
+
+![Result of jupyter notebook](/images/jupyter-plot-result-1-7d361e4961c8f06cbb68a6cab4fafcf4.png)

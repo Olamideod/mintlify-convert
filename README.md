@@ -184,6 +184,24 @@ python -m mintlify_convert.cli doc.mdx -o output.mdx
 python mintlify_convert.py doc.mdx -o output.mdx
 ```
 
+### One-Command URL Scrape → Convert (New)
+```bash
+# Scrape a live URL, download images, save MDX, convert to Mintlify, and generate mint.json
+python -m mintlify_convert.cli --url https://example.com/docs/quickstart -o mintlify-docs/ --generate-mint-json --download-assets --validate
+```
+
+### Install & Run
+```bash
+# 1) Install
+pip install -e ".[dev]"
+
+# 2) URL → Mintlify (single step)
+python -m mintlify_convert.cli --url https://example.com/docs/quickstart -o mintlify-docs/ --generate-mint-json
+
+# 3) Directory → Mintlify
+python -m mintlify_convert.cli docs/ -o mintlify-docs/ --generate-mint-json
+```
+
 ### Enhanced Features with Technical Writing Rules
 The converter now follows Mintlify's technical writing best practices as defined in [agent.md](agent.md):
 
@@ -272,14 +290,14 @@ Contributions are welcome! Please:
 
 MIT License - see [LICENSE](LICENSE) file for details.
 
-## 📞 Support
+##  Support
 
-- 📧 **Email**: support@example.com
-- 💬 **Discord**: [Join our community](https://discord.gg/example)
-- 🐛 **Issues**: [GitHub Issues](https://github.com/yourusername/mintlify-convert/issues)
-- 📖 **Docs**: [Full Documentation](https://docs.example.com)
+-  **Email**: support@example.com
+-  **Discord**: [Join our community](https://discord.gg/example)
+-  **Issues**: [GitHub Issues](https://github.com/yourusername/mintlify-convert/issues)
+-  **Docs**: [Full Documentation](https://docs.example.com)
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 Built with ❤️ to help teams migrate to Mintlify faster.
 

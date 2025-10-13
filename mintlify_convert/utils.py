@@ -5,7 +5,7 @@ Utility functions for Mintlify Convert.
 
 import sys
 from pathlib import Path
-from typing import Dict, Tuple, Optional
+from typing import Dict, List, Tuple, Optional
 
 from .converter import MintlifyConverter
 
@@ -101,7 +101,7 @@ def process_directory(input_dir: Path, output_dir: Path, **kwargs) -> Dict:
     return file_metadata
 
 
-def find_mdx_files(directory: Path) -> list[Path]:
+def find_mdx_files(directory: Path) -> List[Path]:
     """Find all MDX and MD files in a directory.
     
     Args:

@@ -41,14 +41,19 @@ Convert MDX documentation to Mintlify format with enhanced features for seamless
 
 ### Installation
 
+Requires Python 3.10 or newer.
+
 ```bash
-# From source (Python 3.10 or newer)
+pip install mintlify-convert
+```
+
+Or from source:
+
+```bash
 git clone https://github.com/Olamideod/mintlify-convert.git
 cd mintlify-convert
 pip install -e .
 ```
-
-The package is not yet published to PyPI.
 
 ### Basic Usage
 

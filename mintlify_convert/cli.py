@@ -20,16 +20,16 @@ def main(argv=None):
 Examples:
   # Convert a single file
   mintlify-convert input.mdx -o output.mdx
-  
+
   # Convert a directory with assets
   mintlify-convert docs/ -o mintlify-docs/ --download-assets
-  
+
   # Generate docs.json (use --legacy-mint-json for the older mint.json)
   mintlify-convert docs/ -o mintlify-docs/ --generate-config --sort-pages
-  
+
   # Validate output
   mintlify-convert docs/ -o mintlify-docs/ --validate
-  
+
   # Full conversion with all features
   mintlify-convert docs/ -o mintlify-docs/ \\
     --generate-config \\

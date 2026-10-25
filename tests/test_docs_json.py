@@ -186,7 +186,7 @@ def test_navbar_and_footer_placement(tmp_path):
         linkedin="https://linkedin.com/in/o",
     )
     links = cfg["navbar"]["links"]
-    assert any(l.get("href") == "https://s.test" for l in links)
+    assert any(link.get("href") == "https://s.test" for link in links)
     assert cfg["navbar"]["primary"]["href"] == "https://d.test"
     socials = cfg["footer"]["socials"]
     assert socials == {

@@ -31,7 +31,10 @@ def check_paths(input_path: Path, output_path: Optional[Path]) -> Optional[str]:
 
 
 def process_file(
-    input_path: Path, output_path: Path = None, converter: MintlifyConverter = None, **kwargs
+    input_path: Path,
+    output_path: Optional[Path] = None,
+    converter: Optional[MintlifyConverter] = None,
+    **kwargs,
 ) -> Tuple[bool, Optional[str]]:
     """Process a single MDX file.
 
@@ -243,7 +246,7 @@ def validate_input_path(input_path: Path) -> bool:
 
 
 def print_conversion_summary(
-    converted_count: int, total_count: int, assets_copied: int = 0, errors: list = None
+    converted_count: int, total_count: int, assets_copied: int = 0, errors: Optional[list] = None
 ) -> None:
     """Print a summary of the conversion process.
 

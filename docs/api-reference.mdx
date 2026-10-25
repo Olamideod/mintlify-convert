@@ -33,18 +33,19 @@ mintlify-convert INPUT [OPTIONS]
 
 | Option | Description |
 |--------|-------------|
-| `--download-assets` | Copy image assets to /images directory |
+| `--download-assets` | Copy image assets to /images directory. Only images inside the input directory are copied. |
 | `--validate` | Validate MDX output and report errors |
-| `--use-ai-description` | Use AI to generate descriptions (requires OpenAI API key) |
 | `--verbose` | Show detailed error messages |
 
 #### Navigation Options
 
 | Option | Description | Example |
 |--------|-------------|---------|
-| `--generate-mint-json` | Generate mint.json navigation file | `--generate-mint-json` |
+| `--generate-config` | Generate `docs.json` (default config format) | `--generate-config` |
+| `--legacy-mint-json` | With `--generate-config`, write `mint.json` instead | `--generate-config --legacy-mint-json` |
+| `--generate-mint-json` | Deprecated alias for `--generate-config --legacy-mint-json`; prints a warning | |
 | `--sort-pages` | Sort pages alphabetically within groups | `--sort-pages` |
-| `--project-name` | Project name for mint.json | `--project-name "My API Docs"` |
+| `--project-name` | Project name for the generated config | `--project-name "My API Docs"` |
 
 #### Branding Options
 
@@ -77,7 +78,7 @@ mintlify-convert docs/ -o mintlify-docs/ --download-assets
 
 ```bash
 mintlify-convert docs/ -o mintlify-docs/ \
-  --generate-mint-json \
+  --generate-config \
   --download-assets \
   --validate \
   --sort-pages \
@@ -95,16 +96,6 @@ mintlify-convert docs/ -o mintlify-docs/ \
 ```bash
 mintlify-convert docs/ -o mintlify-docs/ --validate --verbose
 ```
-
-## Environment Variables
-
-You can set these environment variables to configure default behavior:
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `MINTLIFY_CONVERT_ASSETS_DIR` | Custom assets directory name | `images` |
-| `MINTLIFY_CONVERT_STRICT_MODE` | Enable strict validation | `false` |
-| `OPENAI_API_KEY` | OpenAI API key for AI descriptions | None |
 
 ## Programmatic Usage
 
@@ -128,16 +119,21 @@ result = converter.convert(content, validate=True)
 file_metadata = process_directory(
     Path("docs"),
     Path("output"),
-    validate=True,
-    generate_mint_json=True
+    validate=True
 )
 ```
 
-## Error Codes
+## Limits and Warnings
 
-| Code | Description |
-|------|-------------|
-| 0 | Success |
-| 1 | General error (file not found, permission denied, etc.) |
-| 2 | Validation errors found |
-| 3 | No MDX files found in directory |
+- Input files larger than 1 MiB are rejected with an error such as `Error: <path> is too large (limit is 1 MiB)`.
+- Symlinked input files are skipped, with a warning on stderr.
+- Images with a `file:` source are skipped, with a warning on stderr.
+- Warnings do not change the exit status.
+
+## Navigation Order
+
+In `docs.json` (and `mint.json`) the group "Getting Started" comes first, then "Documentation", then the remaining groups from folder names in alphabetical order. Pages are listed by title with `--sort-pages`.
+
+## Exit Status
+
+The tool exits with status 1 on errors such as a missing input path or an output path that equals or sits inside the input path. Otherwise it exits normally.

@@ -1,9 +1,6 @@
 # Mintlify Convert
 
-[![PyPI version](https://badge.fury.io/py/mintlify-convert.svg)](https://badge.fury.io/py/mintlify-convert)
-[![Python Support](https://img.shields.io/pypi/pyversions/mintlify-convert.svg)](https://pypi.org/project/mintlify-convert/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://github.com/yourusername/mintlify-convert/workflows/Tests/badge.svg)](https://github.com/yourusername/mintlify-convert/actions)
 
 Convert MDX documentation to Mintlify format with enhanced features for seamless migration.
 
@@ -12,31 +9,31 @@ Convert MDX documentation to Mintlify format with enhanced features for seamless
 ### 🎯 Core Conversions
 - ✅ Frontmatter generation (title, description, icon, mode)
 - ✅ Callouts/Admonitions → Proper Mintlify components (`<Warning>`, `<Tip>`, `<Note>`, `<Info>`, `<Check>`)
-- ✅ Numbered lists → `<Steps>` component with intelligent title extraction
+- ✅ Numbered lists → one `<Steps>` per list, with plain-text titles taken from each step
 - ✅ Help sections → `<Card>` components with contextual icons
 - ✅ API links → Mintlify API reference format
 - ✅ Code blocks with proper formatting
 
 ### 🧩 Advanced Components (Enhanced with Technical Writing Rules)
-- ✅ `<Accordion>` blocks (smart detection from H3 sections)
-- ✅ `<Tabs>` and `<Tab>` (enhanced language detection and proper display names)
-- ✅ `<Banner>` for important notices
-- ✅ `<Frame>` wrapped images for better presentation
-- ✅ Intelligent component selection based on content context
+- ✅ `<Accordion>` for H3 sections whose titles match a keyword heuristic (troubleshooting, FAQ, advanced, common issues, known issues, error codes, walkthrough, step by step, breakdown)
+- ✅ `<Tabs>` and `<Tab>` for language-labelled code blocks, with display names such as "JavaScript"
+- ✅ `<Banner>` for paragraphs that start with "Deprecated:", "Important:", "Notice:" or "Alert:"
+- ✅ `<Frame>` around images that are copied with `--download-assets`
 
 ### 🧭 Navigation
-- ✅ Enhanced `mint.json` generation
-- ✅ Nested groups based on folder structure
+- ✅ `docs.json` generation (default), or legacy `mint.json` with `--legacy-mint-json`
+- ✅ Nested groups based on folder structure ("Getting Started" first, then "Documentation", then A-Z)
 - ✅ Proper page titles from frontmatter
 - ✅ Optional alphabetical sorting
 
 ### 🖼️ Asset Handling
-- ✅ Image copying to `/images` directory
-- ✅ Relative link rewriting
+- ✅ Image copying to `/images` directory (only with `--download-assets`, only from inside the input directory)
+- ✅ Relative link rewriting (links that resolve outside the input directory are left unchanged)
 - ✅ Automatic path correction
 
 ### 🔧 Quality Assurance
-- ✅ MDX validation (unclosed tags, JSX in code blocks)
+- ✅ Input files over 1 MiB are rejected; symlinked inputs and `file:` images are skipped with a warning on stderr
+- ✅ MDX validation (unclosed or mismatched tags; code blocks are ignored)
 - ✅ Detailed error reporting
 - ✅ Verbose mode for debugging
 
@@ -45,14 +42,13 @@ Convert MDX documentation to Mintlify format with enhanced features for seamless
 ### Installation
 
 ```bash
-# From PyPI (when published)
-pip install mintlify-convert
-
-# From source
-git clone https://github.com/yourusername/mintlify-convert.git
+# From source (Python 3.10 or newer)
+git clone https://github.com/Olamideod/mintlify-convert.git
 cd mintlify-convert
 pip install -e .
 ```
+
+The package is not yet published to PyPI.
 
 ### Basic Usage
 
@@ -65,18 +61,22 @@ mintlify-convert docs/ -o mintlify-docs/
 
 # With all features
 mintlify-convert docs/ -o mintlify-docs/ \
-  --generate-mint-json \
+  --generate-config \
   --download-assets \
   --validate \
   --sort-pages
 ```
 
+`--generate-config` writes `docs.json`. Add `--legacy-mint-json` to write `mint.json` instead. `--generate-mint-json` is a deprecated alias for both flags together.
+
+Converting is idempotent: running the tool on its own output produces the same output. The output path must not be the same as, or inside, the input path.
+
 ## 📖 Documentation
 
-- **[Getting Started](docs/getting-started.md)** - Quick start guide
-- **[API Reference](docs/api-reference.md)** - Complete CLI and programmatic API
-- **[Component Mapping](docs/component-mapping.md)** - How patterns are converted
-- **[Troubleshooting](docs/troubleshooting.md)** - Common issues and solutions
+- **[Getting Started](docs/getting-started.mdx)** - Quick start guide
+- **[API Reference](docs/api-reference.mdx)** - Complete CLI and programmatic API
+- **[Component Mapping](docs/component-mapping.mdx)** - How patterns are converted
+- **[Troubleshooting](docs/troubleshooting.mdx)** - Common issues and solutions
 
 ## 🎯 Component Conversions
 
@@ -126,13 +126,10 @@ const api = require('api');
 
 Python:
 import api
-
-Node.js:
-const api = require('api');
 ```
 
 **Output:**
-```mdx
+````mdx
 <Tabs>
   <Tab title="JavaScript">
 ```javascript
@@ -144,19 +141,14 @@ const api = require('api');
 import api
 ```
   </Tab>
-  <Tab title="Node.js">
-```javascript
-const api = require('api');
-```
-  </Tab>
 </Tabs>
-```
+````
 
 ##  Development
 
 ### Setup
 ```bash
-git clone https://github.com/yourusername/mintlify-convert.git
+git clone https://github.com/Olamideod/mintlify-convert.git
 cd mintlify-convert
 pip install -e ".[dev]"
 ```
@@ -166,33 +158,24 @@ pip install -e ".[dev]"
 pytest tests/ -v --cov=mintlify_convert
 ```
 
-### Run Mintlify Convert (Enhanced with Technical Writing Rules)
+### Run Mintlify Convert
 ```bash
-# Convert all MDX files in docs/ to mintlify format with enhanced components
-python -m mintlify_convert.cli docs/ -o mintlify-docs/ --generate-mint-json
+# Convert all MDX files in docs/ and write docs.json
+python -m mintlify_convert.cli docs/ -o mintlify-docs/ --generate-config
 
-# Or use the standalone script (legacy)
-python mintlify_convert.py docs/ -o mintlify-docs/ --generate-mint-json
-```
-
-### Stand Alone Code
-```bash
-# Using the CLI module
+# Convert a single file
 python -m mintlify_convert.cli doc.mdx -o output.mdx
-
-# Or using the standalone script
-python mintlify_convert.py doc.mdx -o output.mdx
 ```
 
-### Enhanced Features with Technical Writing Rules
-The converter now follows Mintlify's technical writing best practices as defined in [agent.md](agent.md):
+### Conversion behaviour
+The converter follows the component guidance in [agent.md](agent.md):
 
-- **Proper Component Usage**: Uses `<Warning>`, `<Tip>`, `<Note>`, `<Info>`, `<Check>` instead of generic callouts
-- **Enhanced Steps**: Extracts meaningful titles from step content
-- **Smart Accordions**: Automatically detects accordion-worthy content
-- **Frame-wrapped Images**: All images are wrapped in `<Frame>` components for better presentation
-- **Improved Tabs**: Better language detection and proper display names
-- **Contextual Help Cards**: Smart icon selection based on content type
+- Callouts become `<Warning>`, `<Tip>`, `<Note>`, `<Info>` or `<Check>`
+- Numbered lists become `<Steps>` with descriptive titles taken from each step
+- Accordions, Banners and Frames follow the narrow rules listed under Features
+- Callouts, banners and numbered lists that start with a code fence are left unconverted; banners and help cards only match at the start of a paragraph
+- Three or more consecutive language-labelled blocks form one `<Tabs>` group
+- Code fences are left untouched
 
 ### Code Formatting
 ```bash
@@ -209,7 +192,7 @@ mintlify-convert/
 │   ├── __init__.py            # Package initialization
 │   ├── cli.py                 # Command-line interface
 │   ├── converter.py           # Core conversion logic
-│   ├── navigation.py          # mint.json generation
+│   ├── navigation.py          # docs.json / mint.json generation
 │   └── utils.py               # Helper utilities
 │
 ├── tests/                      # Test suite
@@ -224,10 +207,10 @@ mintlify-convert/
 │   └── full-migration/        # Complete migration example
 │
 ├── docs/                       # Package documentation
-│   ├── getting-started.md
-│   ├── api-reference.md
-│   ├── component-mapping.md
-│   └── troubleshooting.md
+│   ├── getting-started.mdx
+│   ├── api-reference.mdx
+│   ├── component-mapping.mdx
+│   └── troubleshooting.mdx
 │
 ├── .github/
 │   └── workflows/             # CI/CD workflows
@@ -244,9 +227,9 @@ mintlify-convert/
 
 ## 🗺️ Roadmap
 
-### Phase 3 (Future)
-- [ ] AI-powered description generation
-- [ ] Parallel processing for large docs
+### Future work
+- [ ] AI-powered description generation (not implemented)
+- [ ] Parallel processing for large docs (not implemented)
 - [ ] Interactive migration wizard (TUI)
 - [ ] Incremental conversion (only changed files)
 - [ ] Custom component plugins
@@ -272,12 +255,9 @@ Contributions are welcome! Please:
 
 MIT License - see [LICENSE](LICENSE) file for details.
 
-## 📞 Support
+## Support
 
-- 📧 **Email**: support@example.com
-- 💬 **Discord**: [Join our community](https://discord.gg/example)
-- 🐛 **Issues**: [GitHub Issues](https://github.com/yourusername/mintlify-convert/issues)
-- 📖 **Docs**: [Full Documentation](https://docs.example.com)
+- Issues: [GitHub Issues](https://github.com/Olamideod/mintlify-convert/issues)
 
 ## 🙏 Acknowledgments
 

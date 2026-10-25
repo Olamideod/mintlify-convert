@@ -724,7 +724,9 @@ class MintlifyConverter:
             tabs: List[Tuple[str, str]] = []
             j = i
             while True:
-                lang = _TAB_LABEL_RE.match(lines[j].strip()).group(1)
+                label = _TAB_LABEL_RE.match(lines[j].strip())
+                assert label is not None  # j only advances over matching label lines
+                lang = label.group(1)
                 k = j + 1
                 buf: List[str] = []
                 while (
@@ -897,14 +899,16 @@ class MintlifyConverter:
     def convert_help_sections(self, content: str) -> str:
         """Convert 'Need help?'-style paragraphs to Card components."""
         pattern = (
-            r"(?:\A|(?<=\n\n))(Need help\?|Questions\?|Support|Contact us|Get help|Need assistance|Stuck\?|Having trouble\?)"
+            r"(?:\A|(?<=\n\n))(Need help\?|Questions\?|Support|Contact us|Get help"
+            r"|Need assistance|Stuck\?|Having trouble\?)"
             r"[ \t]*\n+((?!" + _TAG_LINE + r")(?:[^\n]+\n(?!" + _TAG_LINE + r"))*[^\n]+)"
         )
 
         def replacer(match):
             title, text = match.group(1), match.group(2).strip()
             icon = self._get_help_section_icon(title, text)
-            return f'<Card title="{title}" icon="{icon}">\n  {self._clean_help_section_text(text)}\n</Card>'
+            body = self._clean_help_section_text(text)
+            return f'<Card title="{title}" icon="{icon}">\n  {body}\n</Card>'
 
         return re.sub(pattern, replacer, content)
 

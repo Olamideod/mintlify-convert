@@ -164,7 +164,7 @@ def generate_enhanced_mint_json(file_metadata: Dict, output_path: Path, **kwargs
     light = _check_color(kwargs.get("light_color"), "light_color")
     dark = _check_color(kwargs.get("dark_color"), "dark_color")
 
-    colors = {"primary": primary}
+    colors: Dict = {"primary": primary}
     if light:
         colors["light"] = light
     if dark:

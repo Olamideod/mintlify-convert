@@ -3,6 +3,8 @@ title: "Advanced API Documentation"
 description: "This example demonstrates advanced component conversions and features."
 ---
 
+This example demonstrates advanced component conversions and features.
+
 ## Authentication Methods
 
 ### API Key Authentication
@@ -48,23 +50,25 @@ For more secure applications, use OAuth 2.0:
   </Step>
 </Steps>
 
+## Rate Limits
+
 <Warning>
-Exceeding rate limits will result in temporary suspension.
+**Warning:** Exceeding rate limits will result in temporary suspension.
 </Warning>
 
-* **Free tier**: 100 requests/hour
-* **Pro tier**: 1,000 requests/hour
-* **Enterprise**: Custom limits
+- **Free tier:** 100 requests/hour
+- **Pro tier:** 1,000 requests/hour
+- **Enterprise:** Custom limits
 
 <Accordion title="Advanced Configuration">
 This section contains detailed configuration options.
 
 You can customize various aspects of the API integration:
 
-* **Base URL**: Set custom API endpoint
-* **Timeout**: Configure request timeouts
-* **Retry logic**: Set up automatic retries
-* **Logging**: Enable detailed request logging
+- **Base URL:** Set custom API endpoint
+- **Timeout:** Configure request timeouts
+- **Retry logic:** Set up automatic retries
+- **Logging:** Enable detailed request logging
 </Accordion>
 
 ## Error Handling
@@ -78,6 +82,6 @@ Our API returns standard HTTP status codes:
 | 401 | Unauthorized |
 | 429 | Rate Limited |
 
-<Warning>
-The v1 API will be discontinued on January 1, 2024.
-</Warning>
+<Banner type="warning">
+  The v1 API will be discontinued on January 1, 2024.
+</Banner>

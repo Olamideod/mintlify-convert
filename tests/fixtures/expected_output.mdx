@@ -3,9 +3,9 @@ title: "Getting Started with Our API"
 description: "Welcome to our comprehensive API documentation. This guide will help you get up and running quickly."
 ---
 
-<Warning>
-Our API has rate limits to ensure fair usage.
-</Warning>
+Welcome to our comprehensive API documentation. This guide will help you get up and running quickly.
+
+## Quick Setup
 
 <Steps>
   <Step title="Sign up for an account">
@@ -31,12 +31,18 @@ Our API uses API key authentication. Include your key in the header:
 curl -H "Authorization: Bearer YOUR_API_KEY" https://api.example.com/v1/users
 ```
 
-* **Free tier**: 100 requests per hour
-* **Pro tier**: 1,000 requests per hour
-* **Enterprise**: Custom limits
+## Rate Limits
+
+<Warning>
+**Important:** Our API has rate limits to ensure fair usage.
+</Warning>
+
+- **Free tier:** 100 requests per hour
+- **Pro tier:** 1,000 requests per hour
+- **Enterprise:** Custom limits
 
 <Card title="Need help?" icon="help-circle">
-Contact our support team at support@example.com or check our FAQ.
+  Contact our support team at support@example.com or check our FAQ.
 </Card>
 
 <Accordion title="Advanced Configuration">
@@ -44,7 +50,7 @@ This section contains detailed configuration options that can be collapsed for b
 
 You can configure various settings here:
 
-* **Base URL**: Customize the API base URL
-* **Timeout**: Set request timeout values
-* **Retry logic**: Configure automatic retries
+- **Base URL:** Customize the API base URL
+- **Timeout:** Set request timeout values
+- **Retry logic:** Configure automatic retries
 </Accordion>

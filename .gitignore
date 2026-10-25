@@ -53,3 +53,9 @@ Thumbs.db
 *.log
 temp/
 tmp/
+
+# Environment and tool caches
+.env
+.mypy_cache/
+.ruff_cache/
+.deepeval/

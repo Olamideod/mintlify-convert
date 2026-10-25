@@ -1,53 +1,19 @@
 # Mintlify Convert
 
+[![PyPI](https://img.shields.io/pypi/v/mintlify-convert)](https://pypi.org/project/mintlify-convert/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Convert MDX documentation to Mintlify format with enhanced features for seamless migration.
+You have a documentation site written in MDX, and you want it on Mintlify. Mintlify renders callouts, step lists, and tabbed code as components, and it reads navigation from a `docs.json` file. Moving the pages means rewriting each of those patterns by hand and writing the navigation file yourself. Mintlify Convert rewrites the patterns from the command line and generates `docs.json`. This README shows how to install it, what it converts, and where it stops.
 
-## ✨ Features
+## Install
 
-### 🎯 Core Conversions
-- ✅ Frontmatter generation (title, description, icon, mode)
-- ✅ Callouts/Admonitions → Proper Mintlify components (`<Warning>`, `<Tip>`, `<Note>`, `<Info>`, `<Check>`)
-- ✅ Numbered lists → one `<Steps>` per list, with plain-text titles taken from each step
-- ✅ Help sections → `<Card>` components with contextual icons
-- ✅ API links → Mintlify API reference format
-- ✅ Code blocks with proper formatting
-
-### 🧩 Advanced Components (Enhanced with Technical Writing Rules)
-- ✅ `<Accordion>` for H3 sections whose titles match a keyword heuristic (troubleshooting, FAQ, advanced, common issues, known issues, error codes, walkthrough, step by step, breakdown)
-- ✅ `<Tabs>` and `<Tab>` for language-labelled code blocks, with display names such as "JavaScript"
-- ✅ `<Banner>` for paragraphs that start with "Deprecated:", "Important:", "Notice:" or "Alert:"
-- ✅ `<Frame>` around images that are copied with `--download-assets`
-
-### 🧭 Navigation
-- ✅ `docs.json` generation (default), or legacy `mint.json` with `--legacy-mint-json`
-- ✅ Nested groups based on folder structure ("Getting Started" first, then "Documentation", then A-Z)
-- ✅ Proper page titles from frontmatter
-- ✅ Optional alphabetical sorting
-
-### 🖼️ Asset Handling
-- ✅ Image copying to `/images` directory (only with `--download-assets`, only from inside the input directory)
-- ✅ Relative link rewriting (links that resolve outside the input directory are left unchanged)
-- ✅ Automatic path correction
-
-### 🔧 Quality Assurance
-- ✅ Input files over 1 MiB are rejected; symlinked inputs and `file:` images are skipped with a warning on stderr
-- ✅ MDX validation (unclosed or mismatched tags; code blocks are ignored)
-- ✅ Detailed error reporting
-- ✅ Verbose mode for debugging
-
-## 🚀 Quick Start
-
-### Installation
-
-Requires Python 3.10 or newer.
+The package needs Python 3.10 or newer. Install it from PyPI:
 
 ```bash
 pip install mintlify-convert
 ```
 
-Or from source:
+To work from source, clone the repository and install it in editable mode:
 
 ```bash
 git clone https://github.com/Olamideod/mintlify-convert.git
@@ -55,76 +21,86 @@ cd mintlify-convert
 pip install -e .
 ```
 
-### Basic Usage
+## Convert your docs
+
+Point the command at a file or a directory and set an output path. The tool prints one line for each converted file. With `--validate`, it also prints a warning for each file that has problems.
 
 ```bash
-# Convert a single file
-mintlify-convert input.mdx -o output.mdx
+# Convert one file
+mintlify-convert INPUT.mdx -o OUTPUT.mdx
 
-# Convert an entire directory
-mintlify-convert docs/ -o mintlify-docs/
+# Convert a directory
+mintlify-convert DOCS_DIR/ -o OUTPUT_DIR/
 
-# With all features
-mintlify-convert docs/ -o mintlify-docs/ \
-  --generate-config \
-  --download-assets \
-  --validate \
-  --sort-pages
+# Convert a directory, write docs.json, and check the output
+mintlify-convert DOCS_DIR/ -o OUTPUT_DIR/ --generate-config --validate --sort-pages
 ```
 
-`--generate-config` writes `docs.json`. Add `--legacy-mint-json` to write `mint.json` instead. `--generate-mint-json` is a deprecated alias for both flags together.
+The `--generate-config` option writes `docs.json` in the output directory, with navigation groups that follow your folder structure. If you need the older `mint.json`, then add `--legacy-mint-json`.
 
-Converting is idempotent: running the tool on its own output produces the same output. The output path must not be the same as, or inside, the input path.
+> [!NOTE]
+> The output path can't match the input path or sit inside it. Running the tool on its own output produces the same output.
 
-## 📖 Documentation
+## What it converts
 
-- **[Getting Started](docs/getting-started.mdx)** - Quick start guide
-- **[API Reference](docs/api-reference.mdx)** - Complete CLI and programmatic API
-- **[Component Mapping](docs/component-mapping.mdx)** - How patterns are converted
-- **[Troubleshooting](docs/troubleshooting.mdx)** - Common issues and solutions
+The table below lists each pattern the tool recognizes and the component it writes. The examples after the table show the page body only. The tool also writes frontmatter above it, with a title and, when the page has an opening paragraph, a description.
 
-## 🎯 Component Conversions
+| Input | Output | Rule |
+| --- | --- | --- |
+| Blockquote | `<Warning>`, `<Note>`, `<Tip>`, `<Info>`, or `<Check>` | Uses a leading label such as `Warning:` or `Tip:`. Without a label, it looks for keywords and falls back to `<Info>`. |
+| Numbered list | `<Steps>` with one `<Step>` for each item | The title is the first sentence or clause, up to about 80 characters. The body keeps the full text. |
+| Two or more blocks that start with a language label, such as `Python:` | `<Tabs>` with one `<Tab>` for each block | Wraps each block in a code fence for that language. |
+| `###` heading with a keyword in its title | `<Accordion>` | Keywords: troubleshooting, FAQ, frequently asked, advanced, common issues, known issues, error codes, walkthrough, step by step, breakdown. |
+| Paragraph that starts with `Deprecated:`, `Important:`, `Notice:`, or `Alert:` | `<Banner>` | `Notice:` becomes an info banner. The other three become warnings. |
+| Paragraph that starts with `Need help?`, `Questions?`, `Support`, `Contact us`, `Get help`, `Need assistance`, `Stuck?`, or `Having trouble?` | `<Card>` with an icon | Picks the icon from the title and the text. |
+| Markdown image | `<Frame>` around an `<img>` tag | Empty alt text becomes "Documentation image". |
+| Link to `/api/#operation/NAME` | Link to `/api-reference/NAME` | Applies to those links only. |
+| Relative link to a `.md` or `.mdx` file | Root-relative link without the extension | Links that resolve outside the input directory stay as written. |
 
-### Callouts (Enhanced)
-**Input:**
+### Callouts
+
+The tool reads the leading label of a blockquote and picks the matching component. This input:
+
 ```markdown
-> **Warning:** This is a critical note.
-> Please read carefully.
+> **Warning:** This change can't be undone.
+> Back up your files first.
 ```
 
-**Output:**
+becomes this output:
+
 ```mdx
 <Warning>
-**Warning:** This is a critical note.
-Please read carefully.
+**Warning:** This change can't be undone.
+Back up your files first.
 </Warning>
 ```
 
-### Steps (Enhanced with Smart Titles)
-**Input:**
+### Steps
+
+Each numbered item becomes a step. The title is the first sentence, and the body keeps the full text, so the first sentence appears twice. This input:
+
 ```markdown
-1. Install dependencies using npm
-2. Configure your environment variables
-3. Start the development server
+1. Run the install command. This downloads the package and its dependencies.
+2. Open the settings file and set the project name.
 ```
 
-**Output:**
+becomes this output:
+
 ```mdx
 <Steps>
-  <Step title="Install dependencies using npm">
-  Install dependencies using npm
+  <Step title="Run the install command">
+  Run the install command. This downloads the package and its dependencies.
   </Step>
-  <Step title="Configure your environment variables">
-  Configure your environment variables
-  </Step>
-  <Step title="Start the development server">
-  Start the development server
+  <Step title="Open the settings file and set the project name">
+  Open the settings file and set the project name.
   </Step>
 </Steps>
 ```
 
-### Tabs (Enhanced Language Support)
-**Input:**
+### Tabs
+
+Labelled blocks that sit next to each other form one tab group. This input:
+
 ```markdown
 JavaScript:
 const api = require('api');
@@ -133,7 +109,8 @@ Python:
 import api
 ```
 
-**Output:**
+becomes this output:
+
 ````mdx
 <Tabs>
   <Tab title="JavaScript">
@@ -149,123 +126,79 @@ import api
 </Tabs>
 ````
 
-##  Development
+## Known limits
 
-### Setup
+The tool handles the patterns above and nothing else. These limits matter most when you plan a migration.
+
+- The tool doesn't convert Docusaurus syntax. Admonitions that start with `:::` and imports from `@theme` stay as written. A test on the `website/docs` folder of the Docusaurus repository (89 files, October 25, 2026) converted every file without errors. Still, 71 files kept their `:::` admonitions and 42 kept their Docusaurus imports.
+- The tool treats every blockquote as a callout. A plain quotation becomes `<Info>`, so review your quotes after you convert.
+- A step title that contains inline HTML, such as `<em>`, triggers a validation warning.
+- Validation checks for unclosed or mismatched tags. It doesn't check how Mintlify renders the page, so preview the converted site before you publish it.
+- The tool rejects input files over 1 MiB. It skips symlinks and `file:` images, and it prints a warning for each one.
+
+## Options
+
+The table below lists the options you'll use most. Run `mintlify-convert --help` for the brand color, topbar, and social link options.
+
+| Option | What it does |
+| --- | --- |
+| `-o`, `--output` | Sets the output file or directory. |
+| `--generate-config` | Writes `docs.json` in the output directory. |
+| `--legacy-mint-json` | With `--generate-config`, writes `mint.json` instead. |
+| `--sort-pages` | Sorts pages alphabetically within each navigation group. |
+| `--validate` | Checks the output for unclosed or mismatched tags. |
+| `--download-assets` | Copies images from inside the input directory to `/images`. |
+| `--icon`, `--mode` | Adds an icon or a mode, such as `wide`, to each page's frontmatter. |
+| `--project-name` | Sets the project name in the generated config. |
+| `--verbose` | Shows detailed error messages. |
+
+The `--generate-mint-json` option is a deprecated alias for `--generate-config --legacy-mint-json`.
+
+## More documentation
+
+The `docs/` folder holds four guides:
+
+- [Getting started](docs/getting-started.mdx): install and first conversion
+- [API reference](docs/api-reference.mdx): the command line and the Python API
+- [Component mapping](docs/component-mapping.mdx): how each pattern converts
+- [Troubleshooting](docs/troubleshooting.mdx): common problems and fixes
+
+## Develop
+
+Clone the repository, install the development dependencies, and run the tests:
+
 ```bash
 git clone https://github.com/Olamideod/mintlify-convert.git
 cd mintlify-convert
 pip install -e ".[dev]"
-```
-
-### Run Tests
-```bash
 pytest tests/ -v --cov=mintlify_convert
 ```
 
-### Run Mintlify Convert
-```bash
-# Convert all MDX files in docs/ and write docs.json
-python -m mintlify_convert.cli docs/ -o mintlify-docs/ --generate-config
+The project uses black, flake8, and mypy for code quality:
 
-# Convert a single file
-python -m mintlify_convert.cli doc.mdx -o output.mdx
-```
-
-### Conversion behaviour
-The converter follows the component guidance in [agent.md](agent.md):
-
-- Callouts become `<Warning>`, `<Tip>`, `<Note>`, `<Info>` or `<Check>`
-- Numbered lists become `<Steps>` with descriptive titles taken from each step
-- Accordions, Banners and Frames follow the narrow rules listed under Features
-- Callouts, banners and numbered lists that start with a code fence are left unconverted; banners and help cards only match at the start of a paragraph
-- Three or more consecutive language-labelled blocks form one `<Tabs>` group
-- Code fences are left untouched
-
-### Code Formatting
 ```bash
 black mintlify_convert/
 flake8 mintlify_convert/
 mypy mintlify_convert/
 ```
 
-##  Project Structure
+The file `agent.md` holds the Mintlify writing rules behind the component choices.
 
-```
-mintlify-convert/
-├── mintlify_convert/           # Main package
-│   ├── __init__.py            # Package initialization
-│   ├── cli.py                 # Command-line interface
-│   ├── converter.py           # Core conversion logic
-│   ├── navigation.py          # docs.json / mint.json generation
-│   └── utils.py               # Helper utilities
-│
-├── tests/                      # Test suite
-│   ├── test_converter.py      # Unit tests for converter
-│   ├── test_integration.py    # Integration tests
-│   ├── test_navigation.py     # Navigation tests
-│   └── fixtures/              # Test fixtures
-│
-├── examples/                   # Example conversions
-│   ├── basic/                 # Basic examples
-│   ├── advanced/              # Advanced examples
-│   └── full-migration/        # Complete migration example
-│
-├── docs/                       # Package documentation
-│   ├── getting-started.mdx
-│   ├── api-reference.mdx
-│   ├── component-mapping.mdx
-│   └── troubleshooting.mdx
-│
-├── .github/
-│   └── workflows/             # CI/CD workflows
-│
-├── pyproject.toml             # Modern Python project config
-├── requirements.txt           # Dependencies
-├── requirements-dev.txt       # Development dependencies
-├── README.md                  # This file
-├── LICENSE                    # MIT License
-├── CHANGELOG.md              # Version history
-├── agent.md                   # Mintlify technical writing rules
-└── .gitignore                # Git ignore rules
-```
+## Roadmap
 
-## 🗺️ Roadmap
+None of these features exist yet. The first two come from the limits above.
 
-### Future work
-- [ ] AI-powered description generation (not implemented)
-- [ ] Parallel processing for large docs (not implemented)
-- [ ] Interactive migration wizard (TUI)
-- [ ] Incremental conversion (only changed files)
-- [ ] Custom component plugins
-- [ ] Automatic image optimization
-- [ ] Diff viewer for conversions
-- [ ] VS Code extension
-- [ ] Web-based converter UI
-- [ ] Support for Docusaurus → Mintlify
-- [ ] Support for GitBook → Mintlify
-- [ ] Migration analytics and reporting
+- Docusaurus to Mintlify conversion
+- GitBook to Mintlify conversion
+- Incremental conversion of changed files only
+- Parallel processing for large docs
+- Migration reports
+- Custom component plugins
 
-## 🤝 Contributing
+## Contribute
 
-Contributions are welcome! Please:
+Open an issue before you start a large change. For a small fix, fork the repository, create a branch, run `pytest tests/`, and open a pull request. Report bugs in [GitHub Issues](https://github.com/Olamideod/mintlify-convert/issues).
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+## License
 
-## 📄 License
-
-MIT License - see [LICENSE](LICENSE) file for details.
-
-## Support
-
-- Issues: [GitHub Issues](https://github.com/Olamideod/mintlify-convert/issues)
-
-## 🙏 Acknowledgments
-
-Built with ❤️ to help teams migrate to Mintlify faster.
-
-*Star ⭐ this repo if it helped you!*
+MIT. Read the [LICENSE](LICENSE) file for details.

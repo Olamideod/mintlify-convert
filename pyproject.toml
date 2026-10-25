@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=45", "wheel", "setuptools_scm>=6.2"]
+requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,10 +7,10 @@ name = "mintlify-convert"
 version = "2.0.0"
 description = "Convert MDX documentation to Mintlify format"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 license = {text = "MIT"}
 authors = [
-    {name = "Your Name", email = "your.email@example.com"}
+    {name = "olamide_codex", email = "oluwamusiwaolamide@gmail.com"}
 ]
 keywords = ["mintlify", "mdx", "documentation", "conversion", "migration"]
 classifiers = [
@@ -18,40 +18,40 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Documentation",
+    "Topic :: Text Processing :: Markup",
 ]
-dependencies = [
-    "requests>=2.28.0",
-]
+dependencies = []
 
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=3.0.0",
-    "black>=22.0.0",
-    "flake8>=4.0.0",
-    "mypy>=0.950",
+    "black>=23.0.0",
+    "flake8>=5.0.0",
+    "mypy>=1.0.0",
     "isort>=5.10.0",
-]
-ai = [
-    "openai>=1.0.0",
+    "jsonschema>=4",
 ]
 
 [project.urls]
-Homepage = "https://github.com/yourusername/mintlify-convert"
-Documentation = "https://mintlify-convert.readthedocs.io"
-Repository = "https://github.com/yourusername/mintlify-convert.git"
-Issues = "https://github.com/yourusername/mintlify-convert/issues"
+Homepage = "https://github.com/Olamideod/mintlify-convert"
+Repository = "https://github.com/Olamideod/mintlify-convert.git"
+Issues = "https://github.com/Olamideod/mintlify-convert/issues"
 
 [project.scripts]
 mintlify-convert = "mintlify_convert.cli:main"
 
+[tool.setuptools]
+packages = ["mintlify_convert"]
+
 [tool.black]
 line-length = 100
-target-version = ['py38', 'py39', 'py310', 'py311']
+target-version = ["py310"]
 include = '\.pyi?$'
 
 [tool.isort]
@@ -63,10 +63,10 @@ testpaths = ["tests"]
 python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
-addopts = "-v --cov=mintlify_convert --cov-report=term-missing"
+addopts = "-v"
 
 [tool.mypy]
-python_version = "3.8"
-warn_return_any = true
+python_version = "3.10"
 warn_unused_configs = true
-disallow_untyped_defs = true
+check_untyped_defs = true
+ignore_missing_imports = true

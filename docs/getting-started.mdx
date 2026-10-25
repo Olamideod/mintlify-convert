@@ -8,27 +8,25 @@ Mintlify Convert is a powerful tool that transforms your existing MDX documentat
 
 ## Key Features
 
-- **Automatic Component Conversion**: Converts blockquotes to Callouts, numbered lists to Steps, and more
+- **Automatic Component Conversion**: Converts blockquotes to Warning, Note, Tip and similar callouts, numbered lists to Steps, and more
 - **Asset Management**: Copies images and updates paths automatically
-- **Navigation Generation**: Creates mint.json files with proper structure
+- **Navigation Generation**: Creates a `docs.json` file (or legacy `mint.json`) with proper structure
 - **Validation**: Checks for common MDX issues
 - **Batch Processing**: Convert entire documentation directories at once
 
 ## Quick Installation
 
-### From PyPI (Recommended)
-
-```bash
-pip install mintlify-convert
-```
-
 ### From Source
 
+Requires Python 3.10 or newer.
+
 ```bash
-git clone https://github.com/yourusername/mintlify-convert.git
+git clone https://github.com/Olamideod/mintlify-convert.git
 cd mintlify-convert
 pip install -e .
 ```
+
+The package is not yet published to PyPI.
 
 ## Your First Conversion
 
@@ -50,7 +48,7 @@ Welcome to our API! This guide will help you get started.
 
 Need help?
 
-Contact us at support@example.com
+Contact our support team.
 ```
 
 2. **Run the conversion**:
@@ -66,23 +64,23 @@ description: "Welcome to our API! This guide will help you get started."
 ---
 
 <Steps>
-  <Step title="Step 1">
+  <Step title="Sign up for an account">
   Sign up for an account
   </Step>
-  <Step title="Step 2">
+  <Step title="Get your API key">
   Get your API key
   </Step>
-  <Step title="Step 3">
+  <Step title="Make your first request">
   Make your first request
   </Step>
 </Steps>
 
-<Callout type="note">
+<Note>
 **Note:** Keep your API key secure.
-</Callout>
+</Note>
 
-<Card title="Need help?" icon="question">
-Contact us at support@example.com
+<Card title="Need help?" icon="help-circle">
+  Contact our support team.
 </Card>
 ```
 
@@ -96,22 +94,24 @@ mintlify-convert docs/ -o mintlify-docs/
 
 # With all features enabled
 mintlify-convert docs/ -o mintlify-docs/ \
-  --generate-mint-json \
+  --generate-config \
   --download-assets \
   --validate \
   --sort-pages \
   --project-name "My API Documentation"
 ```
 
+`--generate-config` writes `docs.json`. Add `--legacy-mint-json` to write `mint.json` instead. The output directory must not be the input directory or inside it, and converting the output again gives the same result.
+
+Input files must be 1 MiB or smaller, and symlinked input files are skipped with a warning.
+
 ## Next Steps
 
-- Learn about [component mappings](component-mapping.md)
-- Explore [advanced configuration options](api-reference.md)
+- Learn about [component mappings](component-mapping.mdx)
+- Explore [advanced configuration options](api-reference.mdx)
 - Check out [examples](../examples/) for more complex scenarios
-- Read about [troubleshooting common issues](troubleshooting.md)
+- Read about [troubleshooting common issues](troubleshooting.mdx)
 
 ## Need Help?
 
-- 📧 Email: support@example.com
-- 💬 Discord: [Join our community](https://discord.gg/example)
-- 🐛 Issues: [GitHub Issues](https://github.com/yourusername/mintlify-convert/issues)
+- Issues: [GitHub Issues](https://github.com/Olamideod/mintlify-convert/issues)

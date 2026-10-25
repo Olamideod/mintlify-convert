@@ -13,22 +13,22 @@ This guide helps you resolve common issues when using Mintlify Convert.
 
 **Solutions**:
 <Steps>
-  <Step title="Step 1">
+  <Step title="Check file extensions - ensure files are .mdx or .md">
   Check file extensions - ensure files are `.mdx` or `.md`
   </Step>
-  <Step title="Step 2">
+  <Step title="Verify the input path is correct">
   Verify the input path is correct
   </Step>
-  <Step title="Step 3">
+  <Step title="Use --verbose flag for detailed output">
   Use `--verbose` flag for detailed output
-  </Step>
-</Steps>
 
 ```bash
 # Check what files are found
 ls -la docs/
 mintlify-convert docs/ -o output/ --verbose
 ```
+  </Step>
+</Steps>
 
 ### Validation Errors
 
@@ -36,21 +36,21 @@ mintlify-convert docs/ -o output/ --verbose
 
 **Solutions**:
 <Steps>
-  <Step title="Step 1">
+  <Step title="Review the validation warnings">
   Review the validation warnings
   </Step>
-  <Step title="Step 2">
+  <Step title="Check for unclosed HTML/MDX tags in source files">
   Check for unclosed HTML/MDX tags in source files
   </Step>
-  <Step title="Step 3">
+  <Step title="Ensure code blocks are properly formatted">
   Ensure code blocks are properly formatted
-  </Step>
-</Steps>
 
 ```bash
 # Run with validation to see specific errors
 mintlify-convert docs/ -o output/ --validate --verbose
 ```
+  </Step>
+</Steps>
 
 ### Images Not Copying
 
@@ -58,46 +58,46 @@ mintlify-convert docs/ -o output/ --validate --verbose
 
 **Solutions**:
 <Steps>
-  <Step title="Step 1">
+  <Step title="Use the --download-assets flag">
   Use the `--download-assets` flag
   </Step>
-  <Step title="Step 2">
-  Ensure images exist in the source directory
+  <Step title="Ensure images exist inside the input directory">
+  Ensure images exist inside the input directory; images outside it, absolute paths and URLs are not copied
   </Step>
-  <Step title="Step 3">
+  <Step title="Check file permissions">
   Check file permissions
-  </Step>
-</Steps>
 
 ```bash
 # Enable asset copying
 mintlify-convert docs/ -o output/ --download-assets --verbose
 ```
-
-### mint.json Structure Issues
-
-**Problem**: Generated mint.json has incorrect structure or missing pages.
-
-**Solutions**:
-<Steps>
-  <Step title="Step 1">
-  Use `--generate-mint-json` flag
-  </Step>
-  <Step title="Step 2">
-  Check that source files have proper titles
-  </Step>
-  <Step title="Step 3">
-  Use `--sort-pages` for consistent ordering
   </Step>
 </Steps>
 
+### Navigation File Structure Issues
+
+**Problem**: The generated `docs.json` (or `mint.json`) has incorrect structure or missing pages.
+
+**Solutions**:
+<Steps>
+  <Step title="Use the --generate-config flag (add --legacy-mint-json for mint.json)">
+  Use the `--generate-config` flag (add `--legacy-mint-json` for `mint.json`)
+  </Step>
+  <Step title="Check that source files have proper titles">
+  Check that source files have proper titles
+  </Step>
+  <Step title="Use --sort-pages for consistent ordering">
+  Use `--sort-pages` for consistent ordering
+
 ```bash
-# Generate mint.json with sorting
+# Generate docs.json with sorting
 mintlify-convert docs/ -o output/ \
-  --generate-mint-json \
+  --generate-config \
   --sort-pages \
   --project-name "My Documentation"
 ```
+  </Step>
+</Steps>
 
 ### Component Conversion Issues
 
@@ -105,13 +105,13 @@ mintlify-convert docs/ -o output/ \
 
 **Solutions**:
 <Steps>
-  <Step title="Step 1">
-  Check the [component mapping guide](component-mapping.md)
+  <Step title="Check the component mapping guide">
+  Check the [component mapping guide](/component-mapping)
   </Step>
-  <Step title="Step 2">
+  <Step title="Ensure proper formatting (spacing, keywords)">
   Ensure proper formatting (spacing, keywords)
   </Step>
-  <Step title="Step 3">
+  <Step title="Use --verbose to see conversion details">
   Use `--verbose` to see conversion details
   </Step>
 </Steps>
@@ -119,32 +119,39 @@ mintlify-convert docs/ -o output/ \
 **Callouts not working**:
 ```markdown
 # Correct format
-<Callout type="warning">
-**Warning:** This is important.
-</Callout>
+> **Warning:** This is important.
 
 # Incorrect format
-<Callout type="warning">
-Warning: This is important.
-</Callout>
+> Warning: This is important.
 ```
 
 **Steps not working**:
 ```markdown
 # Correct format
-<Steps>
-  <Step title="Step 1">
-  First step
-  </Step>
-  <Step title="Step 2">
-  Second step
-  </Step>
-</Steps>
+1. First step
+2. Second step
 
 # Incorrect format
 1) First step
 2) Second step
 ```
+
+### "Too large" Error or Skipped Files
+
+**Problem**: The converter reports a file is too large (limit is 1 MiB), or a warning says a symlink or `file:` image was skipped.
+
+**Solutions**:
+<Steps>
+  <Step title="Split files larger than 1 MiB into several pages">
+  Split files larger than 1 MiB into several pages
+  </Step>
+  <Step title="Replace symlinked input files with real files">
+  Replace symlinked input files with real files
+  </Step>
+  <Step title="Use a relative image path instead of a file: URL">
+  Use a relative image path instead of a `file:` URL
+  </Step>
+</Steps>
 
 ### Permission Errors
 
@@ -152,22 +159,22 @@ Warning: This is important.
 
 **Solutions**:
 <Steps>
-  <Step title="Step 1">
+  <Step title="Check directory permissions">
   Check directory permissions
   </Step>
-  <Step title="Step 2">
+  <Step title="Ensure output directory is writable">
   Ensure output directory is writable
   </Step>
-  <Step title="Step 3">
+  <Step title="Run with appropriate user permissions">
   Run with appropriate user permissions
-  </Step>
-</Steps>
 
 ```bash
 # Check permissions
 ls -la output/
 chmod 755 output/
 ```
+  </Step>
+</Steps>
 
 ### Memory Issues with Large Documentation
 
@@ -175,22 +182,22 @@ chmod 755 output/
 
 **Solutions**:
 <Steps>
-  <Step title="Step 1">
+  <Step title="Process files in smaller batches">
   Process files in smaller batches
   </Step>
-  <Step title="Step 2">
+  <Step title="Use a system with more RAM">
   Use a system with more RAM
   </Step>
-  <Step title="Step 3">
+  <Step title="Close other applications during conversion">
   Close other applications during conversion
-  </Step>
-</Steps>
 
 ```bash
 # Process subdirectories separately
 mintlify-convert docs/api/ -o output/api/
 mintlify-convert docs/guides/ -o output/guides/
 ```
+  </Step>
+</Steps>
 
 ## Debugging Tips
 
@@ -234,7 +241,7 @@ file -i docs/*.mdx
 For documentation with 1000+ files:
 
 <Steps>
-  <Step title="Step 1">
+  <Step title="Process incrementally">
   **Process incrementally**:
 ```bash
 # Process by directory
@@ -245,147 +252,66 @@ done
   </Step>
 </Steps>
 
-<Steps>
-  <Step title="Step 1">
-  **Skip validation for speed**:
-```bash
-mintlify-convert docs/ -o output/ --no-validate
-```
-  </Step>
-</Steps>
-
-<Steps>
-  <Step title="Step 1">
-  **Use parallel processing** (future feature):
-```bash
-mintlify-convert docs/ -o output/ --parallel --workers 4
-```
-  </Step>
-</Steps>
-
 ### Slow Asset Copying
 
-For large numbers of images:
+For large numbers of images, copy them yourself and convert without `--download-assets` (image links are then left as written):
 
-<Steps>
-  <Step title="Step 1">
-  **Copy assets separately**:
 ```bash
-# Copy all images first
 cp -r docs/images output/
-# Then convert without asset copying
-mintlify-convert docs/ -o output/ --no-download-assets
+mintlify-convert docs/ -o output/
 ```
-  </Step>
-</Steps>
 
 ## Getting Help
 
 ### Check Documentation
 
 <Steps>
-  <Step title="Step 1">
-  Review the [getting started guide](getting-started.md)
+  <Step title="Review the getting started guide">
+  Review the [getting started guide](/getting-started)
   </Step>
-  <Step title="Step 2">
-  Check the [API reference](api-reference.md)
+  <Step title="Check the API reference">
+  Check the [API reference](/api-reference)
   </Step>
-  <Step title="Step 3">
-  Look at [component mappings](component-mapping.md)
+  <Step title="Look at component mappings">
+  Look at [component mappings](/component-mapping)
   </Step>
 </Steps>
-
-### Enable Debug Logging
-
-Set environment variables for detailed logging:
-
-```bash
-export MINTLIFY_CONVERT_DEBUG=1
-export MINTLIFY_CONVERT_STRICT_MODE=true
-mintlify-convert docs/ -o output/ --verbose
-```
 
 ### Report Issues
 
 When reporting issues, include:
 
 <Steps>
-  <Step title="Step 1">
+  <Step title="Command used">
   **Command used**:
 ```bash
 mintlify-convert docs/ -o output/ --verbose
 ```
   </Step>
-</Steps>
-
-<Steps>
-  <Step title="Step 1">
+  <Step title="Error output">
   **Error output**:
 ```bash
 # Capture full error output
 mintlify-convert docs/ -o output/ --verbose 2>&1 | tee error.log
 ```
   </Step>
-</Steps>
-
-<Steps>
-  <Step title="Step 1">
+  <Step title="System information">
   **System information**:
 ```bash
 python --version
 pip list | grep mintlify
 ```
   </Step>
-</Steps>
-
-<Steps>
-  <Step title="Step 1">
+  <Step title="Sample files - Provide a minimal example that reproduces the issue">
   **Sample files** - Provide a minimal example that reproduces the issue
   </Step>
 </Steps>
 
 ### Community Support
 
-- 📧 **Email**: support@example.com
-- 💬 **Discord**: [Join our community](https://discord.gg/example)
-- 🐛 **GitHub Issues**: [Report bugs](https://github.com/yourusername/mintlify-convert/issues)
-- 💡 **GitHub Discussions**: [Ask questions](https://github.com/yourusername/mintlify-convert/discussions)
+- GitHub Issues: [Report bugs](https://github.com/Olamideod/mintlify-convert/issues)
 
 ## Advanced Troubleshooting
-
-### Custom Converter Issues
-
-If you're extending the converter:
-
-```python
-from mintlify_convert import MintlifyConverter
-
-class MyConverter(MintlifyConverter):
-    def convert(self, content, **kwargs):
-        try:
-            # Your custom logic
-            content = self.custom_transform(content)
-            return super().convert(content, **kwargs)
-        except Exception as e:
-            print(f"Custom conversion error: {e}")
-            # Fall back to standard conversion
-            return super().convert(content, **kwargs)
-```
-
-### Plugin Development
-
-For custom plugins:
-
-```python
-def my_plugin(content: str) -> str:
-    """Custom transformation plugin."""
-    try:
-        # Plugin logic here
-        return transformed_content
-    except Exception as e:
-        print(f"Plugin error: {e}")
-        return content  # Return original content on error
-```
 
 ### Performance Profiling
 

@@ -13,90 +13,80 @@ Mintlify Convert automatically recognizes patterns in your MDX content and conve
 
 ### Input Pattern
 ```markdown
-<Callout type="warning">
-**Warning:** This is important information.
-Please read carefully.
-</Callout>
+> **Warning:** This is important information.
+> Please read carefully.
 
-<Callout type="tip">
-**Tip:** Here's a helpful suggestion.
-Try this approach for better results.
-</Callout>
+> **Tip:** Here's a helpful suggestion.
+> Try this approach for better results.
 ```
 
 ### Output
 ```mdx
-<Callout type="warning">
+<Warning>
 **Warning:** This is important information.
 Please read carefully.
-</Callout>
+</Warning>
 
-<Callout type="tip">
+<Tip>
 **Tip:** Here's a helpful suggestion.
 Try this approach for better results.
-</Callout>
+</Tip>
 ```
 
 ### Supported Types
-- `warning` - For warnings, cautions, and important notices
-- `tip` - For tips, hints, and best practices
-- `note` - For general notes and reminders
-- `info` - For informational content (default)
+- `<Warning>` - For warnings, cautions, and important notices
+- `<Tip>` - For tips, hints, and best practices
+- `<Note>` - For general notes and reminders
+- `<Info>` - For informational content
+- `<Check>` - For success and confirmation messages
 
 ## Steps (Numbered Lists)
 
 ### Input Pattern
 ```markdown
-<Steps>
-  <Step title="Step 1">
-  First step with instructions
-  </Step>
-  <Step title="Step 2">
-  Second step with more details
-  </Step>
-  <Step title="Step 3">
-  Third step to complete the process
+1. Install the package
+2. Configure your API key
+3. Run your first request
 ```
-  </Step>
-</Steps>
 
 ### Output
 ```mdx
 <Steps>
-  <Step title="Step 1">
-  First step with instructions
+  <Step title="Install the package">
+  Install the package
   </Step>
-  <Step title="Step 2">
-  Second step with more details
+  <Step title="Configure your API key">
+  Configure your API key
   </Step>
-  <Step title="Step 3">
-  Third step to complete the process
+  <Step title="Run your first request">
+  Run your first request
   </Step>
 </Steps>
 ```
+
+Step titles come from the step text. Leading words such as "First", "Next", "Then", "Finally" and "Step N:" are removed from the title. Titles are plain text (no backticks or `**` markers) and, for long steps, end at a clause or word boundary at about 80 characters. The full step text stays in the step body.
+
+One numbered list becomes one `<Steps>` block. A list continues across blank lines and across code fences or indented content between numbered items; that content belongs to the preceding step. The list ends at the first non-blank line that is not indented and not numbered.
 
 ## Tabs (Language-Specific Code)
 
 ### Input Pattern
-```markdown
-<Tabs>
-  <Tab title="JavaScript">
+````markdown
+JavaScript:
 ```javascript
 const api = require('api');
 api.get('/users');
 ```
-  </Tab>
-  <Tab title="Python">
+
+Python:
 ```python
 import api
 api.get('/users')
 ```
-```
-  </Tab>
-</Tabs>
+````
 
 ### Output
-```mdx
+````mdx
 <Tabs>
   <Tab title="JavaScript">
 ```javascript
@@ -111,7 +101,9 @@ api.get('/users')
 ```
   </Tab>
 </Tabs>
-```
+````
+
+Tabs are built from a language label followed by a fenced code block. Consecutive labelled blocks form one `<Tabs>` group, and a group needs at least two blocks. Unfenced `Label:` lines work for some languages (JavaScript, Python) but not all (for example Node.js is not recognised), so prefer fenced code.
 
 ### Supported Languages
 - JavaScript
@@ -121,9 +113,11 @@ api.get('/users')
 - Go
 - Java
 - PHP
-- Curl
+- Curl (title shown as "cURL")
 
 ## Accordions (H3 Sections)
+
+Only H3 sections whose title contains one of these keywords (case-insensitive) become accordions: troubleshooting, FAQ, frequently asked, advanced, common issues, known issues, error codes, walkthrough, step by step, breakdown. Other H3 sections stay as headings. An accordion ends at the next heading of any level.
 
 ### Input Pattern
 ```markdown
@@ -146,6 +140,8 @@ You can customize various settings here.
 
 ## Banners (Top-Level Notices)
 
+Only a paragraph that starts with `Deprecated:`, `Important:`, `Notice:` or `Alert:` (optionally preceded by an emoji) is converted. The same text in the middle of a paragraph is left alone.
+
 ### Input Pattern
 ```markdown
 ⚠️ Deprecated: This endpoint will be removed in v2.0
@@ -156,11 +152,11 @@ You can customize various settings here.
 ### Output
 ```mdx
 <Banner type="warning">
-This endpoint will be removed in v2.0
+  This endpoint will be removed in v2.0
 </Banner>
 
 <Banner type="warning">
-Maintenance scheduled for tonight at 10 PM
+  Maintenance scheduled for tonight at 10 PM
 </Banner>
 ```
 
@@ -172,50 +168,36 @@ Maintenance scheduled for tonight at 10 PM
 
 ### Input Pattern
 ```markdown
-<Card title="Need help?" icon="question">
-  Contact our support team at support@example.com
+Need help?
+
+Contact our support team
+or check our FAQ section.
+
+Questions?
+
+Feel free to reach out if you have any questions.
+```
+
+### Output
+```mdx
+<Card title="Need help?" icon="help-circle">
+  Contact our support team
 or check our FAQ section.
 </Card>
 
 <Card title="Questions?" icon="question">
   Feel free to reach out if you have any questions.
-```
 </Card>
 
-### Output
-```mdx
-<Card title="Need help?" icon="question">
-Contact our support team at support@example.com
-or check our FAQ section.
-</Card>
-
-<Card title="Questions?" icon="question">
-Feel free to reach out if you have any questions.
-</Card>
-```
-
-## Lists with Bold Headers
-
-### Input Pattern
-```markdown
-* **Authentication** - Secure API key authentication
-* **Rate limiting** - Fair usage policies
-* **Webhooks** - Real-time event notifications
-```
-
-### Output
-```mdx
-* **Authentication**: Secure API key authentication
-* **Rate limiting**: Fair usage policies
-* **Webhooks**: Real-time event notifications
+The icon is chosen from the title and text, so it varies. A help card is only recognised when its title line starts a paragraph.
 ```
 
 ## API Links
 
 ### Input Pattern
 ```markdown
-[Get Users](/api-reference/getUsers-v1)
-[Create User](/api-reference/createUser-v1)
+[Get Users](/api/#operation/getUsers-v1)
+[Create User](/api/#operation/createUser-v1)
 ```
 
 ### Output
@@ -223,6 +205,10 @@ Feel free to reach out if you have any questions.
 [Get Users](/api-reference/getUsers-v1)
 [Create User](/api-reference/createUser-v1)
 ```
+
+## Relative Links
+
+Relative links to `.md` and `.mdx` files are rewritten to root-relative paths without the extension, for example `[Other](other.mdx)` becomes `[Other](/other)`. A relative link that resolves outside the input directory (for example `../examples/`) is left unchanged.
 
 ## Images
 
@@ -234,9 +220,21 @@ Feel free to reach out if you have any questions.
 
 ### Output (with --download-assets)
 ```mdx
-![API Flow](/images/api-flow.png)
-![Logo](/images/logo.svg)
+<Frame>
+  <img src="/images/api-flow.png" alt="API Flow" />
+</Frame>
+<Frame>
+  <img src="/images/logo.svg" alt="Logo" />
+</Frame>
 ```
+
+Image rules:
+
+- Images are copied only when `--download-assets` is set. Without it, image links are left as written.
+- The source image must be inside the input directory. Absolute paths, `file:` and `data:` URLs and `//` URLs are not copied.
+- Only common image file types are copied. Symlinks are skipped.
+- An image with a `file:` source is not copied, and a warning is printed to stderr.
+- Copied files go to `/images` using the file name only.
 
 ## Frontmatter Generation
 
@@ -257,11 +255,17 @@ description: "Welcome to our comprehensive API documentation."
 Welcome to our comprehensive API documentation.
 ```
 
+## Idempotence and code fences
+
+Converting already-converted output yields the same output. Content inside fenced code blocks is never transformed. A callout, banner or step list whose first line is a code fence is left unconverted.
+
 ## Custom Patterns
 
 You can extend Mintlify Convert to recognize custom patterns by subclassing the `MintlifyConverter` class:
 
 ```python
+import re
+
 from mintlify_convert import MintlifyConverter
 
 class CustomConverter(MintlifyConverter):
@@ -281,24 +285,23 @@ class CustomConverter(MintlifyConverter):
 ## Best Practices
 
 <Steps>
-  <Step title="Step 1">
+  <Step title="Use consistent formatting - Stick to standard markdown patterns for best results">
   **Use consistent formatting** - Stick to standard markdown patterns for best results
   </Step>
-  <Step title="Step 2">
+  <Step title="Test your conversions - Always validate output with --validate flag">
   **Test your conversions** - Always validate output with `--validate` flag
   </Step>
-  <Step title="Step 3">
+  <Step title="Review component mappings - Check that conversions match your expectations">
   **Review component mappings** - Check that conversions match your expectations
   </Step>
-  <Step title="Step 4">
+  <Step title="Customize as needed - Extend the converter for project-specific patterns">
   **Customize as needed** - Extend the converter for project-specific patterns
   </Step>
 </Steps>
 
 ## Troubleshooting Mappings
 
-### Common Issues
-
+<Accordion title="Common Issues">
 **Issue**: Callouts not converting properly
 **Solution**: Ensure blockquotes start with `>` and include keywords like "Warning:", "Tip:", etc.
 
@@ -309,4 +312,5 @@ class CustomConverter(MintlifyConverter):
 **Solution**: Use exact language names followed by colon (JavaScript:, Python:, etc.)
 
 **Issue**: Images not copying
-**Solution**: Use `--download-assets` flag and ensure images exist in source directory
+**Solution**: Use `--download-assets` and ensure the images are inside the input directory
+</Accordion>

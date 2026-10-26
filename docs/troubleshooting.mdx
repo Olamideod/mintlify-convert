@@ -183,11 +183,11 @@ done
 
 ### Slow Asset Copying
 
-For large numbers of images, copy them yourself and convert without `--download-assets` (image links are then left as written):
+For large numbers of images, copy them yourself and convert with `--no-assets` (image links are then left as written):
 
 ```bash
 cp -r docs/images output/
-mintlify-convert docs/ -o output/
+mintlify-convert docs/ -o output/ --no-assets
 ```
 
 ## Getting Help

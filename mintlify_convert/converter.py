@@ -13,7 +13,11 @@ import posixpath
 import re
 import shutil
 from pathlib import Path
+from urllib.parse import unquote
 from typing import Dict, Iterator, List, Optional, Tuple
+
+from . import docusaurus
+from .icons import convert_emoji_line, resolve_icon, strip_emoji, strip_emoji_everywhere
 
 # Inputs larger than this are rejected before any regex work (1 MiB).
 MAX_INPUT_BYTES = 1024 * 1024
@@ -31,7 +35,7 @@ _SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.\-]*:")
 _HEADING_RE = re.compile(r"^#{1,6}(?:[ \t]|$)")
 _H1_RE = re.compile(r"^#[ \t]+(.+?)[ \t]*$", re.MULTILINE)
 _NON_PROSE_RE = re.compile(
-    r"^\s*(?:#{1,6}(?:\s|$)|[-*+]\s|\d+[.)]\s|>|<|\||import\s|export\s|"
+    r"^\s*(?:#{1,6}(?:\s|$)|[-*+]\s|\d+[.)]\s|>|<|\||import\s|export\s|\[[^\]\n]+\]:\s|\*\*[^*\n]+\*\*\s*$|"
     r"-{3,}\s*$|\*{3,}\s*$|_{3,}\s*$|:::|!\[|\[\^|" + _TOKEN_OPEN + r"F)"
 )
 _STEP_PREFIX_RE = re.compile(
@@ -99,6 +103,32 @@ _TARGET_MAX = 2000
 _IMG_ATTRS_MAX = 2000
 
 
+def _target_end(text: str, start: int) -> int:
+    """Index of the ')' that closes a link target starting at `start`; parentheses inside the
+    target (wiki/page_(1).md) are allowed when balanced. -1 when there is none."""
+    limit = min(len(text), start + _TARGET_MAX + 1)
+    first = text.find(")", start, limit)
+    if first == -1:
+        return -1
+    newline = text.find("\n", start, first)
+    if newline != -1:
+        return -1
+    if text.find("(", start, first) == -1:
+        return first  # the common case: no parentheses inside the target
+    depth = 0
+    for i in range(start, limit):
+        ch = text[i]
+        if ch == "\n":
+            return -1
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            if depth == 0:
+                return i
+            depth -= 1
+    return -1
+
+
 def _scan_links(text: str, images: bool) -> Iterator[Tuple[int, int, str, str]]:
     """Yield (start, end, text, target) for [text](target), or ![alt](target) if images.
 
@@ -132,7 +162,7 @@ def _scan_links(text: str, images: bool) -> Iterator[Tuple[int, int, str, str]]:
         label = text[text_start:idx]
         if len(label) > _TEXT_MAX or (not images and not label):
             continue
-        end = text.find(")", idx + 2, idx + 2 + _TARGET_MAX + 1)
+        end = _target_end(text, idx + 2)
         if end == -1:
             continue
         target = text[idx + 2 : end]
@@ -177,6 +207,18 @@ def _sub_links(text: str, replace) -> str:
         return text
     out.append(text[last:])
     return "".join(out)
+
+
+def _sub_images(text: str) -> str:
+    """Reduce ![alt](src) to its alt text (empty alt leaves nothing)."""
+    out: List[str] = []
+    last = 0
+    for start, end, alt, _target in _scan_links(text, images=True):
+        out.append(text[last:start])
+        out.append(alt)
+        last = end
+    out.append(text[last:])
+    return re.sub(r"\s+", " ", "".join(out)).strip()
 
 
 def _strip_links(text: str) -> str:
@@ -315,17 +357,95 @@ def _attr(value: str) -> str:
     return value.replace('"', "&quot;")
 
 
+def sanitize_segment(segment: str) -> str:
+    """A path segment Mintlify serves cleanly: dots (other than the extension) become hyphens."""
+    return re.sub(r"[.\s]+", "-", segment).strip("-") or segment
+
+
+def sanitize_page_key(key: str) -> str:
+    """'api/docusaurus.config.js' -> 'api/docusaurus-config-js'."""
+    return "/".join(sanitize_segment(part) for part in key.split("/"))
+
+
+_TAG_RE = re.compile(r"<[A-Za-z][^<>]*>")
+_TITLE_MARKUP_RE = re.compile(r"`([^`\n]+)`|\*\*([^*\n]+)\*\*|__([^_\n]+)__")
+
+
+def clean_title(text: str) -> str:
+    """Plain text for a page title: no inline code, emphasis, links or HTML entities.
+
+    Mintlify prints titles and descriptions as written, so backticks would show up literally.
+    """
+    text = _strip_links(text)
+    text = _TITLE_MARKUP_RE.sub(lambda m: m.group(1) or m.group(2) or m.group(3), text)
+    text = re.sub(r"(?<![\w*])[*_](?!\s)([^*_\n]+?)(?<!\s)[*_](?![\w*])", r"\1", text)
+    text = re.sub(
+        r"^[\u2190-\u2BFF\U0001F000-\U0001FAFF\uFE0F\u200d\s]+", "", text
+    )  # leading emoji
+    return re.sub(r"\s+", " ", text).strip()
+
+
+class SiteIndex:
+    """What the converter needs to know about the whole site to rewrite links across pages.
+
+    pages    page key -> {"title", "description", "dir", ...} (keys are output paths)
+    rename   source page key -> output page key, for pages whose file name had to change
+    routes   URL route (a doc's slug, or its path) -> output page key
+    anchors  output page key -> {custom heading id: Mintlify anchor}
+    snippets absolute source path of a partial -> its /snippets/ path
+    prefixes URL prefixes Docusaurus served the docs under, e.g. "/docs"
+    """
+
+    def __init__(self) -> None:
+        self.pages: Dict[str, Dict] = {}
+        self.rename: Dict[str, str] = {}
+        self.routes: Dict[str, str] = {}
+        self.anchors: Dict[str, Dict[str, str]] = {}
+        self.snippets: Dict[Path, str] = {}
+        self.prefixes: List[str] = []
+
+    def resolve(self, path: str) -> Optional[str]:
+        """Output page key for a root-relative route such as '/docs/cli', or None."""
+        route = "/" + path.strip("/")
+        for prefix in self.prefixes:
+            if route == prefix:
+                route = "/"
+            elif route.startswith(prefix + "/"):
+                route = route[len(prefix) :]
+        if route in self.routes:
+            return self.routes[route]
+        key = route.strip("/")
+        for candidate in (key, key + "/index", key + "/README"):
+            if candidate in self.rename:
+                return self.rename[candidate]
+            if candidate in self.pages:
+                return candidate
+        return None
+
+
 class MintlifyConverter:
     def __init__(
         self,
         output_dir: Optional[Path] = None,
         download_assets: bool = False,
         input_root: Optional[Path] = None,
+        static_dir: Optional[Path] = None,
+        index: Optional[SiteIndex] = None,
+        site_url: Optional[str] = None,
     ):
         self.output_dir = output_dir
         self.download_assets = download_assets
         self.input_root = input_root
+        self.static_dir = Path(static_dir) if static_dir else None
+        self.index = index
+        self.site_url = site_url.rstrip("/") if site_url else None
+        self.unresolved: List[str] = []
+        self.outside: List[str] = []
+        self.page_key: Optional[str] = None
+        self.source_rel: Optional[str] = None
+        self.current_file: Optional[Path] = None
         self.assets_copied: Dict[Path, Path] = {}
+        self.files_copied: set = set()
         self.validation_errors: List[str] = []
         self.warnings: List[str] = []
 
@@ -338,13 +458,13 @@ class MintlifyConverter:
         if fm is not None:
             title = _fm_get(fm, "title")
             if title:
-                return title
+                return clean_title(title) or title
         masked, store = _mask_code(body)
         match = _H1_RE.search(masked)
         if match:
             title = re.sub(r"\s+#+$", "", match.group(1)).strip()
             if title:
-                return _restore_code(title, store)
+                return clean_title(_restore_code(title, store)) or "Untitled"
         return "Untitled"
 
     def extract_description(self, content: str) -> str:
@@ -356,6 +476,9 @@ class MintlifyConverter:
             if existing:
                 return existing
         masked, store = _mask_code(body)
+        return self._first_prose(masked, store)
+
+    def _first_prose(self, masked: str, store: "_Store") -> str:
         for block in re.split(r"\n[ \t]*\n", masked.strip("\n")):
             # Headings directly above prose do not hide it. The title heading is removed before
             # a second conversion, so deciding on the prose alone keeps both passes identical.
@@ -379,14 +502,21 @@ class MintlifyConverter:
                 if _NON_PROSE_RE.match(line) or _TAB_LABEL_RE.match(line.strip()):
                     break
                 prose.append(line.strip())
-            desc = _strip_links(" ".join(prose))
+            desc = re.sub(r"\{/\*.*?\*/\}", "", " ".join(prose))
+            desc = _sub_images(desc)
+            desc = re.sub(r"\[([^\]\n]{1,500})\]\[[^\]\n]*\]", r"\1", desc)
+            desc = _strip_links(desc)
             desc = re.sub(r"\*\*([^*\n]{1,500})\*\*", r"\1", desc)
             desc = re.sub(r"\s+", " ", desc).strip()
             if not desc:
                 continue
+            desc = _restore_code(desc, store)
+            desc = re.sub(r"`([^`\n]+)`", r"\1", desc)
+            if desc.endswith(":"):
+                continue  # "Options include:" introduces a list; it is not a summary
             if len(desc) > 200:
                 desc = desc[:200].rstrip() + "..."
-            return _restore_code(desc, store)
+            return desc
         return ""
 
     # --- links --------------------------------------------------------------
@@ -402,17 +532,20 @@ class MintlifyConverter:
         return _sub_links(content, replace)
 
     def _rewrite_link_target(self, target: str, current_file: Optional[Path]) -> str:
-        if (
-            not target
-            or target.startswith("#")
-            or target.startswith("//")
-            or _SCHEME_RE.match(target)
-        ):
+        if not target or target.startswith("//") or _SCHEME_RE.match(target):
             return target
+        if target.startswith("#"):
+            return self._rewrite_anchor(self.page_key, target)
         m = re.search(r"[#?]", target)
         path, rest = (target[: m.start()], target[m.start() :]) if m else (target, "")
-        if path.endswith((".md", ".mdx")):
+        original_path = path
+        if "%" in path:
+            path = unquote(path)
+        had_ext = path.endswith((".md", ".mdx"))
+        if had_ext:
             path = path.rsplit(".", 1)[0]
+        raw_path = path
+        relative_to_file = current_file is not None and not path.startswith("/")
         if current_file is not None and not path.startswith("/"):
             base = ""
             if self.input_root is not None:
@@ -426,9 +559,70 @@ class MintlifyConverter:
             norm = posixpath.normpath(posixpath.join(base, path))
             if norm == ".." or norm.startswith("../"):
                 # Resolves outside the docs root: a root link would be dead, so keep it as written.
+                if original_path not in self.outside:
+                    self.outside.append(original_path)
                 return target
             path = "/" if norm == "." else "/" + norm
+        if self.index is not None and path.startswith("/"):
+            key = self.index.resolve(path)
+            if key is None and had_ext and relative_to_file:
+                # Docusaurus also resolves a doc link written from the docs root.
+                key = self.index.resolve("/" + posixpath.normpath(raw_path.lstrip("/")))
+            if key is not None:
+                return "/" + key + self._rewrite_anchor(key, rest)
+            if len(path) > 1 and path.endswith("/"):
+                path = path.rstrip("/")
+            copied = self._link_asset(path)
+            if copied:
+                return copied + rest
+            if self.site_url and not Path(path).suffix:
+                return self.site_url + path + rest
+            if path not in self.unresolved:
+                self.unresolved.append(path)
+            if "%" in original_path and unquote(original_path) == path:
+                path = original_path
         return path + rest
+
+    def _link_asset(self, path: str) -> Optional[str]:
+        """Copy a file that a link points at (a PDF, a download) next to the pages."""
+        if not self.download_assets or self.output_dir is None or not Path(path).suffix:
+            return None
+        rel = path.lstrip("/")
+        roots = [r for r in (self.static_dir, self.input_root) if r is not None]
+        for root in roots:
+            root = Path(root).resolve()
+            candidate = Path(os.path.normpath(root / rel))
+            try:
+                if (
+                    candidate.is_file()
+                    and not candidate.is_symlink()
+                    and candidate.resolve().is_relative_to(root)
+                    and candidate.suffix.lower() not in (".md", ".mdx")
+                ):
+                    dest = Path(self.output_dir) / rel
+                    out_root = Path(self.output_dir)
+                    below = [
+                        dest,
+                        *[q for q in dest.parents if out_root in q.parents or q == out_root],
+                    ]
+                    if any(q.is_symlink() for q in below if q != out_root):
+                        return None
+                    if dest.resolve().is_relative_to(Path(self.output_dir).resolve()):
+                        dest.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copyfile(candidate, dest)
+                        self.files_copied.add(dest)
+                        return "/" + rel
+            except (OSError, RuntimeError):
+                continue
+        return None
+
+    def _rewrite_anchor(self, key: Optional[str], rest: str) -> str:
+        """Map a custom Docusaurus heading id to the anchor Mintlify generates for it."""
+        if self.index is None or key is None or not rest.startswith("#"):
+            return rest
+        anchor = rest[1:]
+        mapped = self.index.anchors.get(key, {}).get(anchor)
+        return "#" + mapped if mapped else rest
 
     @_fence_safe
     def convert_relative_links(self, content: str, current_file: Optional[Path] = None) -> str:
@@ -437,51 +631,114 @@ class MintlifyConverter:
         def replace_link(_start, text, raw):
             if text.startswith("!["):
                 return None
-            parts = re.match(r'^(\S+)(\s+".*")?$', raw.strip())
-            if not parts or parts.group(1).startswith("<"):
+            parts = re.match(r"""^(<[^<>]+>|\S+)(\s+(?:".*"|'.*'))?$""", raw.strip())
+            if not parts:
                 return None
-            target = self._rewrite_link_target(parts.group(1), current_file)
+            dest = parts.group(1)
+            if dest.startswith("<"):
+                target = self._rewrite_link_target(dest[1:-1], current_file)
+                target = f"<{target}>" if " " in target else target
+            else:
+                target = self._rewrite_link_target(dest, current_file)
             return f'[{text}]({target}{parts.group(2) or ""})'
 
-        return _sub_links(content, replace_link)
+        content = _sub_links(content, replace_link)
+
+        def linked_image(m):
+            target = self._rewrite_link_target(m.group(2), current_file)
+            return f"[{m.group(1)}]({target})"
+
+        content = re.sub(
+            r"\[(!\[[^\]\n]{0,300}\]\([^()\n]{1,500}\))\]\(([^()\s\n]{1,500})\)",
+            linked_image,
+            content,
+        )
+
+        def definition(m):
+            target = m.group(2)
+            angled = target.startswith("<") and target.endswith(">")
+            new = self._rewrite_link_target(target[1:-1] if angled else target, current_file)
+            return f"{m.group(1)}{'<' + new + '>' if angled else new}{m.group(3) or ''}"
+
+        return re.sub(
+            r"""^([ ]{0,3}\[[^\]\n]{1,200}\]:[ \t]*)(<[^>\n]+>|\S+)([ \t]+(?:"[^"\n]*"|'[^'\n]*'|\([^)\n]*\)))?[ \t]*$""",
+            definition,
+            content,
+            flags=re.MULTILINE,
+        )
 
     # --- images -------------------------------------------------------------
+
+    def _asset_candidates(self, src: str, source_file: Path):
+        """(candidate file, allowed root) pairs for an image reference, or None if non-local."""
+        if src.lower().startswith("pathname://"):
+            src = src[len("pathname://") :]
+        if "\x00" in src or re.match(r"^[A-Za-z]:", src) or src.startswith(("\\", "//")):
+            return None
+        input_root = Path(
+            self.input_root if self.input_root is not None else source_file.parent
+        ).resolve()
+        static = self.static_dir.resolve() if self.static_dir is not None else None
+        rel = unquote(src.split("#")[0].split("?")[0])
+        if rel.startswith("@site/static/") and static is not None:
+            return [(static / rel[len("@site/static/") :], static)]
+        if rel.startswith("@site/"):
+            site_root = static.parent if static is not None else input_root.parent
+            return [(site_root / rel[len("@site/") :], site_root)]
+        if _SCHEME_RE.match(src):
+            return None
+        if rel.startswith("/"):
+            # Docusaurus serves /img/x.png from the site's static folder.
+            pairs = [(static / rel.lstrip("/"), static)] if static is not None else []
+            pairs.append((input_root / rel.lstrip("/"), input_root))
+            return pairs
+        pairs = [(source_file.parent.resolve() / rel, input_root)]
+        if static is not None:
+            pairs.append((static / rel, static))
+        return pairs
 
     def _copy_asset(self, src: str, source_file: Path) -> Optional[str]:
         """Copy a local image into <output>/images and return its URL, or None."""
         if not self.download_assets or self.output_dir is None:
             return None
+        pairs = self._asset_candidates(src, source_file)
         if (
-            src.startswith(("/", "\\", "//"))
-            or _SCHEME_RE.match(src)
-            or re.match(r"^[A-Za-z]:", src)
-            or "\x00" in src
+            src.startswith("/images/")
+            and pairs
+            and not any(Path(os.path.normpath(raw)).is_file() for raw, _ in pairs)
         ):
+            return None  # already converted: the file was copied on an earlier run
+        if pairs is None:
             self.warnings.append(f"Skipped image with non-local path: {src}")
             return None
         if Path(src.split("#")[0].split("?")[0]).suffix.lower() not in IMAGE_EXTENSIONS:
             self.warnings.append(f"Skipped image with unsupported extension: {src}")
             return None
-        root = Path(
-            self.input_root if self.input_root is not None else source_file.parent
-        ).resolve()
-        candidate = Path(
-            os.path.normpath(source_file.parent.resolve() / src.split("#")[0].split("?")[0])
-        )
-        try:
-            resolved = candidate.resolve()
-            inside = resolved.is_relative_to(root)
-        except (OSError, RuntimeError):
+        found = None
+        for raw, root in pairs:
+            candidate = Path(os.path.normpath(raw))
+            try:
+                resolved = candidate.resolve()
+                inside = resolved.is_relative_to(root)
+            except (OSError, RuntimeError):
+                continue
+            if not inside:
+                continue
+            if resolved != candidate or candidate.is_symlink():
+                self.warnings.append(f"Skipped symlinked image: {src}")
+                return None
+            if candidate.is_file():
+                found = candidate
+                break
+        if found is None:
+            if any(
+                Path(os.path.normpath(raw)).resolve().is_relative_to(root) for raw, root in pairs
+            ):
+                self.warnings.append(f"Image not found: {src}")
+            else:
+                self.warnings.append(f"Skipped image outside the input directory: {src}")
             return None
-        if not inside:
-            self.warnings.append(f"Skipped image outside the input directory: {src}")
-            return None
-        if resolved != candidate or candidate.is_symlink():
-            self.warnings.append(f"Skipped symlinked image: {src}")
-            return None
-        if not candidate.is_file():
-            self.warnings.append(f"Image not found: {src}")
-            return None
+        candidate = found
 
         if candidate in self.assets_copied:
             return f"/images/{self.assets_copied[candidate].name}"
@@ -500,59 +757,143 @@ class MintlifyConverter:
             self.warnings.append(f"Skipped image copy over symlink: {dest.name}")
             return None
         assets_dir.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(candidate, dest)
+        if not (dest.exists() and os.path.samefile(candidate, dest)):
+            shutil.copyfile(candidate, dest)
         self.assets_copied[candidate] = dest
         return f"/images/{dest.name}"
 
     @_fence_safe
     def handle_images(self, content: str, source_file: Optional[Path] = None) -> str:
-        """Wrap local images in Frame (single pass); copy assets when enabled and safe."""
+        """Wrap images in Frame (single pass); copy local assets when enabled and safe.
+
+        Images already inside a Frame (a themed light/dark pair) keep their wrapper and only
+        have their source rewritten. <img> attributes such as className and width are kept.
+        """
+
+        frames = [m.span() for m in re.finditer(r"<Frame\b[^>]*>.*?</Frame>", content, re.DOTALL)]
+
+        def in_frame(pos: int) -> bool:
+            return any(a < pos < b for a, b in frames)
 
         found = []
         for start, end, alt, raw in _scan_links(content, images=True):
-            parts = re.match(r'^(\S+)(?:\s+"[^"]*")?$', raw.strip())
-            found.append((start, end, alt, parts.group(1) if parts else raw.strip()))
+            parts = re.match(
+                r"""^(?:<([^<>]+)>|(\S+))(?:\s+(?:"([^"]*)"|'([^']*)'))?$""", raw.strip()
+            )
+            src = (parts.group(1) or parts.group(2)) if parts else raw.strip()
+            caption = (parts.group(3) or parts.group(4) or "") if parts else ""
+            found.append((start, end, alt, src, caption, None))
         for start, end, attrs in _scan_img_tags(content):
             s = re.search(r'\bsrc=(?:"([^"]*)"|\'([^\']*)\')', attrs)
             if not s:
                 continue
-            if re.search(r"<Frame\b[^>]*>\s*$", content[max(0, start - 200) : start]):
-                continue
             a = re.search(r'\balt=(?:"([^"]*)"|\'([^\']*)\')', attrs)
             src = s.group(1) if s.group(1) is not None else s.group(2)
             alt = (a.group(1) if a.group(1) is not None else a.group(2)) if a else ""
-            found.append((start, end, alt, src))
+            found.append((start, end, alt, src, "", attrs))
         found.sort(key=lambda item: item[0])
 
         out: List[str] = []
         last = 0
-        for start, end, alt, src in found:
+        for start, end, alt, src, caption, attrs in found:
             if start < last:
                 continue
             if src.lower().startswith("file:"):
                 self.warnings.append(f"Skipped image with file: source: {src}")
                 continue
             if src.startswith("//") or re.match(r"^(?:https?|data):", src, re.IGNORECASE):
+                if (
+                    attrs is None
+                    and not in_frame(start)
+                    and self._alone_on_line(content, start, end)
+                ):
+                    # A remote image on its own line is framed too; there is nothing to copy.
+                    out.append(content[last:start])
+                    out.append(self._wrap_image_in_frame(alt, src, caption))
+                    last = end
                 continue
             if content[start - 1 : start] == "[":
+                # An image that is the label of a link: keep it Markdown, but copy the file.
+                if attrs is None and source_file is not None:
+                    new_src = self._copy_asset(src, source_file)
+                    if new_src:
+                        out.append(content[last:start])
+                        title = f' "{caption}"' if caption else ""
+                        out.append(f"![{alt}]({new_src}{title})")
+                        last = end
                 continue
             if source_file is not None:
                 new_src = self._copy_asset(src, source_file)
                 if new_src:
                     src = new_src
             out.append(content[last:start])
-            out.append(self._wrap_image_in_frame(alt, src))
+            if attrs is not None and in_frame(start):
+                out.append(self._img_tag(attrs, src, alt))
+            elif attrs is not None:
+                out.append(
+                    self._own_lines(
+                        content, start, end, self._wrap_image_in_frame(alt, src, caption, attrs)
+                    )
+                )
+            elif in_frame(start):
+                out.append(self._img_tag(None, src, alt))
+            else:
+                out.append(
+                    self._own_lines(
+                        content, start, end, self._wrap_image_in_frame(alt, src, caption)
+                    )
+                )
             last = end
         if not out:
             return content
         out.append(content[last:])
         return "".join(out)
 
-    def _wrap_image_in_frame(self, alt: str, src: str) -> str:
-        """Wrap image in a Frame component with non-empty alt text."""
-        if not alt or not alt.strip():
-            alt = "Documentation image"
-        return f'<Frame>\n  <img src="{_attr(src)}" alt="{_attr(alt)}" />\n</Frame>'
+    @staticmethod
+    def _alt_from_name(src: str) -> str:
+        """Alt text for an image written without any: its file name, spaced out."""
+        stem = Path(src.split("#")[0].split("?")[0]).stem
+        words = re.sub(r"[-_.]+", " ", stem).strip()
+        return (
+            words[:1].upper() + words[1:]
+            if words and not words.isdigit()
+            else "Documentation image"
+        )
+
+    @staticmethod
+    def _own_lines(content: str, start: int, end: int, block: str) -> str:
+        """A Frame is a block: when prose surrounds the image, give the Frame its own lines."""
+        return docusaurus._own_lines(content, start, end, block)
+
+    @staticmethod
+    def _alone_on_line(content: str, start: int, end: int) -> bool:
+        line_start = content.rfind("\n", 0, start) + 1
+        line_end = content.find("\n", end)
+        line_end = len(content) if line_end == -1 else line_end
+        return not content[line_start:start].strip() and not content[end:line_end].strip()
+
+    def _img_tag(self, attrs: Optional[str], src: str, alt: str) -> str:
+        """An <img /> tag; other attributes of an existing tag are kept, src and alt replaced."""
+        alt = alt.strip() if alt and alt.strip() else self._alt_from_name(src)
+        if attrs is None:
+            return f'<img src="{_attr(src)}" alt="{_attr(alt)}" />'
+        attrs = re.sub(
+            r'\bsrc=(?:"[^"]*"|\'[^\']*\')', lambda _m: f'src="{_attr(src)}"', attrs, count=1
+        )
+        if re.search(r'\balt=(?:"[^"]*"|\'[^\']*\')', attrs):
+            attrs = re.sub(
+                r'\balt=(?:"[^"]*"|\'[^\']*\')', lambda _m: f'alt="{_attr(alt)}"', attrs, count=1
+            )
+        else:
+            attrs = attrs.rstrip() + f' alt="{_attr(alt)}"'
+        return f"<img{re.sub(r'[ \t]*\n[ \t]*', ' ', attrs).rstrip()} />"
+
+    def _wrap_image_in_frame(
+        self, alt: str, src: str, caption: str = "", attrs: Optional[str] = None
+    ) -> str:
+        """Wrap image in a Frame component with non-empty alt text (and the title as caption)."""
+        opener = f'<Frame caption="{_attr(caption)}">' if caption else "<Frame>"
+        return f"{opener}\n  {self._img_tag(attrs, src, alt)}\n</Frame>"
 
     # --- callouts and banners -----------------------------------------------
 
@@ -596,9 +937,10 @@ class MintlifyConverter:
         )
         if label:
             word = label.group(1).lower()
-            if word in ("warning", "caution", "danger", "critical", "important"):
+            if word in ("warning", "caution", "critical", "important"):
                 return "warning"
             return {
+                "danger": "danger",
                 "note": "note",
                 "tip": "tip",
                 "hint": "tip",
@@ -622,6 +964,7 @@ class MintlifyConverter:
     def _get_proper_callout_component(self, callout_type: str) -> str:
         component_map = {
             "warning": "Warning",
+            "danger": "Danger",
             "tip": "Tip",
             "note": "Note",
             "info": "Info",
@@ -829,6 +1172,7 @@ class MintlifyConverter:
                 i += 1
                 continue
             steps: List[str] = []
+            list_start = i
             while match:
                 body = [match.group(2)]
                 i += 1
@@ -852,8 +1196,24 @@ class MintlifyConverter:
                 if not match:
                     i -= trailing
                 steps.append("\n".join(body))
-            flush(steps)
+            if self._is_procedure(steps):
+                flush(steps)
+            else:
+                result.extend(lines[list_start:i])  # a list of facts or questions stays a list
         return "\n".join(result)
+
+    def _is_procedure(self, steps: List[str]) -> bool:
+        """Steps are for procedures. Not for a list of questions, or of long sentences that
+        would make run-on step titles."""
+        long_items = 0
+        for step in steps:
+            first = self._plain_inline(step.split("\n")[0]).strip()
+            if first.endswith("?"):
+                return False
+            sentence_end = re.search(r"[.!?;:](?=\s|$)", first)
+            if len(first) > 80 and (sentence_end is None or sentence_end.start() > 80):
+                long_items += 1
+        return long_items * 2 <= len(steps)
 
     def _plain_inline(self, text: str) -> str:
         """Text with inline code, links and emphasis markers reduced to plain words."""
@@ -879,6 +1239,8 @@ class MintlifyConverter:
         if stripped and stripped.lower() not in ("step", "steps"):
             first = stripped
         title = re.sub(r"\s+", " ", self._plain_inline(first)).strip()
+        # A tag name in a title (`<em>` written as code) must not read as a tag.
+        title = re.sub(r"<(/?[A-Za-z][^<>\n]*)>", r"\1", title)
         for m in re.finditer(r"[.!?;](?=\s|$)", title):
             if m.start() >= 12:
                 title = title[: m.start()]
@@ -893,7 +1255,56 @@ class MintlifyConverter:
             return f"Step {index}"
         return title
 
+    # --- option lists -------------------------------------------------------
+
+    @_fence_safe
+    def convert_option_fields(self, content: str) -> str:
+        """Under a heading named after code, turn '- Type: `x`' / '- Default: `y`' bullets into
+        a ParamField. The heading stays, so its anchor and table-of-contents entry survive."""
+        pattern = re.compile(
+            r"^(#{2,5}[ \t]+(?:" + _TOKEN_OPEN + r"C(\d+)" + _TOKEN_CLOSE + r"))[ \t]*\n\n"
+            r"((?:[-*][ \t]+(?:Type|Default|Required)\b[^\n]*\n)+)",
+            re.MULTILINE,
+        )
+        store = getattr(self, "_code_store", [])
+
+        def plain(token: str) -> str:
+            return _restore_code(token, store).replace("`", "").strip()
+
+        def replace(m):
+            name = store[int(m.group(2))].strip("`").strip() if int(m.group(2)) < len(store) else ""
+            fields = {}
+            for line in m.group(3).strip().split("\n"):
+                f = re.match(r"[-*][ \t]+(Type|Default|Required)\b[ \t]*:?[ \t]*(.*)$", line)
+                if f:
+                    fields[f.group(1).lower()] = plain(f.group(2))
+            if not name or "type" not in fields or not re.fullmatch(r"[\w.$\-\[\]]+", name):
+                return m.group(0)
+            attrs = f'path="{_attr(name)}" type="{_attr(fields["type"])}"'
+            if fields.get("default"):
+                attrs += f' default="{_attr(fields["default"])}"'
+            if fields.get("required", "").lower() in ("true", "yes"):
+                attrs += " required"
+            return f"{m.group(1)}\n\n<ParamField {attrs} />\n"
+
+        return pattern.sub(replace, content)
+
     # --- help cards ---------------------------------------------------------
+
+    @_fence_safe
+    def convert_emoji(self, content: str) -> str:
+        """Replace emoji in prose with Mintlify <Icon /> tags (Lucide names)."""
+        dropped: set = set()
+        content = _TAG_RE.sub(
+            lambda m: m.group(0) if m.group(0).startswith("<Icon") else strip_emoji(m.group(0)),
+            content,
+        )
+        out = "\n".join(convert_emoji_line(ln, dropped) for ln in content.split("\n"))
+        if dropped:
+            self.warnings.append(
+                "No icon for " + " ".join(sorted(dropped)) + "; removed from the page"
+            )
+        return out
 
     @_fence_safe
     def convert_help_sections(self, content: str) -> str:
@@ -918,21 +1329,114 @@ class MintlifyConverter:
         if any(word in title_lower for word in ["support", "contact"]):
             return "headphones"
         elif any(word in title_lower for word in ["questions", "stuck", "trouble"]):
-            return "question"
+            return "circle-help"
         elif any(word in text_lower for word in ["community", "discord", "forum"]):
             return "users"
         elif any(word in text_lower for word in ["documentation", "docs", "guide"]):
-            return "book"
-        return "help-circle"
+            return "book-open"
+        return "circle-help"
 
     def _clean_help_section_text(self, text: str) -> str:
         return "\n".join(line.strip() for line in text.split("\n") if line.strip())
+
+    # --- Docusaurus syntax --------------------------------------------------
+
+    @_fence_safe
+    def convert_docusaurus(self, content: str) -> str:
+        """Rewrite Docusaurus-only syntax: imports, heading ids, comments, admonitions,
+        TabItem tabs, <details> and the inline Docusaurus components."""
+        first = len(self.warnings)
+        removed: Dict[str, str] = {}
+        text = docusaurus.remove_imports(content, removed, self._snippet_for)
+        # With a site index, links to renamed anchors are rewritten, so no warning is needed.
+        text = docusaurus.strip_heading_ids(text, None if self.index is not None else self.warnings)
+        text = docusaurus.convert_html_comments(text)
+        text = docusaurus.convert_inline_components(
+            text,
+            self.warnings,
+            page_url=("/" + self.page_key) if self.page_key else None,
+            source_path=self.source_rel,
+            doc_cards=self._doc_cards(),
+        )
+        text = docusaurus.convert_admonitions(text, self.warnings)
+        text = docusaurus.convert_tabs(text)
+        text = docusaurus.convert_details(text)
+        text = docusaurus.convert_admonition_components(text)
+        text = docusaurus.drop_runtime_exports(text, self.warnings)
+        text = docusaurus.convert_require_links(text)
+        text = docusaurus.convert_code_components(text, self._restore_masked, self._stash_masked)
+        text = docusaurus.convert_image_components(text, removed)
+        text = docusaurus.normalize_img_sources(text)
+        text = docusaurus.neutralize_unknown_components(text, self.warnings, removed)
+        self.warnings[first:] = [_restore_code(w, self._code_store) for w in self.warnings[first:]]
+        return text
+
+    def _restore_masked(self, text: str) -> str:
+        return _restore_code(text, self._code_store)
+
+    def _stash_masked(self, block: str) -> str:
+        """Hide generated code from later rewrites by storing it like masked code."""
+        self._code_store.append(block)
+        return f"{_TOKEN_OPEN}F{len(self._code_store) - 1}{_TOKEN_CLOSE}"
+
+    def _snippet_for(self, module: str) -> Optional[str]:
+        """The /snippets/ path of an imported partial that was converted into a snippet."""
+        if self.index is None or self.current_file is None or not module.startswith("."):
+            return None
+        target = Path(os.path.normpath(Path(self.current_file).resolve().parent / module))
+        return self.index.snippets.get(target)
+
+    def _doc_cards(self) -> Optional[str]:
+        """A CardGroup linking the pages that sit under this page's folder (<DocCardList />)."""
+        if self.index is None or not self.page_key:
+            return None
+        folder = self.page_key.rsplit("/", 1)[0] if "/" in self.page_key else ""
+        if self.page_key.rsplit("/", 1)[-1] not in ("index", "README"):
+            folder = self.page_key
+        cards = []
+        for key, info in sorted(
+            self.index.pages.items(),
+            key=lambda kv: (kv[1].get("position") is None, kv[1].get("position") or 0, kv[0]),
+        ):
+            if key == self.page_key:
+                continue
+            parent = key.rsplit("/", 1)[0] if "/" in key else ""
+            leaf = key.rsplit("/", 1)[-1]
+            if parent == folder or (
+                leaf in ("index", "README") and parent.rsplit("/", 1)[0] == folder and "/" in parent
+            ):
+                cards.append((key, info))
+        if not cards:
+            return None
+        lines = ["<CardGroup cols={2}>"]
+        for key, info in cards:
+            attrs = f'title="{_attr(info.get("title") or key)}" href="/{key}"'
+            desc = info.get("description") or ""
+            # The description is plain text in an MDX body: angle brackets and braces are escaped.
+            desc = desc.replace("<", "&lt;").replace("{", "\\{").replace("}", "\\}")
+            lines.append(f"  <Card {attrs}>")
+            if desc:
+                lines.append(f"    {desc}")
+            lines.append("  </Card>")
+        lines.append("</CardGroup>")
+        return "\n".join(lines)
+
+    def convert_code_blocks(self, content: str) -> str:
+        """Apply Mintlify code block options to each fenced block."""
+        masked, store = _mask_code(content)
+        for m in _TOKEN_RE.finditer(masked):
+            if m.group(1) == "F" and int(m.group(2)) < len(store):
+                idx = int(m.group(2))
+                store[idx] = docusaurus.convert_fence(store[idx])
+        return _restore_all(masked, store)
 
     # --- validation ---------------------------------------------------------
 
     def validate_mdx(self, content: str) -> List[str]:
         """Report unclosed or mismatched tags, ignoring anything inside code."""
-        masked, _ = _mask_code(_normalize(content))
+        _, body = _split_frontmatter(_normalize(content))
+        masked, _ = _mask_code(body)
+        masked = re.sub(r"\{/\*.*?\*/\}", "", masked, flags=re.DOTALL)
         errors: List[str] = []
         stack: List[str] = []
         skip_until = 0
@@ -954,9 +1458,13 @@ class MintlifyConverter:
             if nxt == ">":
                 tag_end = end
             elif nxt.isspace():
-                tag_end = masked.find(">", end, end + 1002)
-                if tag_end == -1:
+                # A ">" inside a quoted attribute value (type="a => b") does not end the tag.
+                closing = re.compile(r"""(?:[^>"']|"[^"\n]*"|'[^'\n]*')*>""").match(
+                    masked, end, end + 1002
+                )
+                if closing is None:
                     continue
+                tag_end = closing.end() - 1
             else:
                 continue
             skip_until = tag_end + 1
@@ -968,6 +1476,78 @@ class MintlifyConverter:
         return errors
 
     # --- frontmatter and title ----------------------------------------------
+
+    @staticmethod
+    def _title_from_path(path: Path) -> str:
+        """A page with no title and no heading is named after its file (or its folder)."""
+        stem = path.with_suffix("").name
+        if stem.lower() in ("index", "readme") and path.parent.name:
+            stem = path.parent.name
+        words = re.sub(r"[-_.]+", " ", stem).strip()
+        return (words[:1].upper() + words[1:]) if words else "Untitled"
+
+    @staticmethod
+    def _fold_block_scalars(lines: List[str]) -> List[str]:
+        """'description: >' followed by indented lines becomes one quoted string; Mintlify's
+        frontmatter reader and this tool both want single-line values."""
+        out: List[str] = []
+        i = 0
+        while i < len(lines):
+            if re.match(r"^(title|description|sidebar_label)\s*:\s*$", lines[i]) and not (
+                i + 1 < len(lines) and lines[i + 1][:1] in (" ", "\t")
+            ):
+                i += 1  # an empty value is the same as none: the title comes from the heading
+                continue
+            q = re.match(r"^([A-Za-z_][\w-]*)\s*:\s*(['\"])(.*)$", lines[i])
+            if (
+                q
+                and q.group(2) not in q.group(3)
+                and i + 1 < len(lines)
+                and lines[i + 1][:1] in " \t"
+            ):
+                j = i + 1
+                block = [q.group(3).strip()]
+                while j < len(lines) and lines[j][:1] in " \t":
+                    block.append(lines[j].strip().rstrip(q.group(2)))
+                    if q.group(2) in lines[j]:
+                        j += 1
+                        break
+                    j += 1
+                out.append(f"{q.group(1)}: {json.dumps(' '.join(block), ensure_ascii=False)}")
+                i = j
+                continue
+            m = re.match(r"^([A-Za-z_][\w-]*)\s*:\s*[>|][+-]?\d*\s*$", lines[i])
+            if not m:
+                out.append(lines[i])
+                i += 1
+                continue
+            j = i + 1
+            block = []
+            while j < len(lines) and (not lines[j].strip() or lines[j][0] in " \t"):
+                block.append(lines[j].strip())
+                j += 1
+            text = re.sub(r"\s+", " ", " ".join(block)).strip()
+            out.append(f"{m.group(1)}: {json.dumps(text, ensure_ascii=False)}")
+            i = j
+        return out
+
+    _YAML_HAZARD = re.compile(r"""(:\s|\s#|^[\[\]{}&*!|>'"%@`-]|:$)""")
+
+    @classmethod
+    def _clean_fm_line(cls, line: str) -> str:
+        """Titles and sidebar labels are printed as written, so strip Markdown from them; a
+        plain value that YAML would misread ('Other: with colon') is quoted."""
+        m = re.match(r"^(title|sidebarTitle|description)\s*:(.*)$", line)
+        if not m:
+            return line
+        key = m.group(1)
+        value = _fm_get([line], key) or ""
+        cleaned = clean_title(value) if key != "description" else value
+        raw = m.group(2).strip()
+        quoted = raw[:1] in ("'", '"')
+        if (cleaned and cleaned != value) or (not quoted and cls._YAML_HAZARD.search(raw)):
+            return f"{key}: {json.dumps(cleaned or value, ensure_ascii=False)}"
+        return line
 
     def create_frontmatter(
         self, title: str, description: str = "", icon: str = "", mode: str = ""
@@ -1036,13 +1616,50 @@ class MintlifyConverter:
         if not text.strip():
             self.warnings.append("Input is empty; wrote a minimal page")
 
+        self.unresolved = []
+        self.outside = []
+        self.current_file = source_file
+        self.page_key = kwargs.get("page_key")
+        self.source_rel = kwargs.get("source_rel")
+        partial = bool(kwargs.get("partial"))
+
         fm_lines, body = _split_frontmatter(text)
+        if fm_lines is not None:
+            fm_lines = self._fold_block_scalars(fm_lines)
+            fm_lines = [self._clean_fm_line(ln) for ln in docusaurus.convert_frontmatter(fm_lines)]
+        body = docusaurus.unwrap_mdx_code_blocks(body)
+        body = self.convert_docusaurus(body)
+        body = self.convert_code_blocks(body)
+        if partial:
+            # A snippet is imported into other pages: no frontmatter and no title of its own.
+            for step in (
+                self.convert_banner,
+                self.convert_api_links,
+                lambda b: self.convert_relative_links(b, source_file),
+                lambda b: self.handle_images(b, source_file),
+                self.convert_lists_with_bold_headers,
+                self.convert_tabs,
+                self.convert_numbered_steps,
+                self.convert_accordions,
+                self.convert_callouts,
+                self.convert_emoji,
+            ):
+                body = step(body)
+            # Mintlify snippet variables are used bare: {name}, not {props.name}.
+            body = re.sub(r"\{props\.(\w+)\}", r"{\1}", body)
+            return strip_emoji_everywhere(body.strip("\n") + "\n")
         existing = fm_lines or []
         fm_title = _fm_get(existing, "title")
         fm_description = _fm_get(existing, "description")
 
         title = fm_title or self.extract_title(body)
+        if title == "Untitled" and source_file is not None:
+            title = self._title_from_path(Path(source_file))
         description = fm_description or self.extract_description(body)
+        if description:
+            description = re.sub(
+                r"^[\u2190-\u2BFF\U0001F000-\U0001FAFF\uFE0F\u200d\s]+", "", description
+            )
         body = self.remove_original_title(body, fm_title if fm_title else None)
 
         body = self.convert_banner(body)
@@ -1055,6 +1672,8 @@ class MintlifyConverter:
         body = self.convert_accordions(body)
         body = self.convert_callouts(body)
         body = self.convert_help_sections(body)
+        body = self.convert_option_fields(body)
+        body = self.convert_emoji(body)
 
         if fm_lines is None:
             header = self.create_frontmatter(
@@ -1070,9 +1689,26 @@ class MintlifyConverter:
             for key in ("icon", "mode"):
                 if kwargs.get(key) and _fm_get(existing, key) is None:
                     tail.append(f"{key}: {json.dumps(kwargs[key], ensure_ascii=False)}")
-            header = "\n".join(["---", *new, *existing, *tail, "---"])
+            # The title leads the frontmatter, whether it was written or derived.
+            lead = [ln for ln in existing if re.match(r"^title\s*:", ln)]
+            rest = [ln for ln in existing if ln not in lead]
+            new_title = [ln for ln in new if ln.startswith("title:")]
+            new_other = [ln for ln in new if not ln.startswith("title:")]
+            header = "\n".join(["---", *new_title, *lead, *new_other, *rest, *tail, "---"])
 
-        result = header + "\n\n" + body.lstrip("\n")
+        result = strip_emoji_everywhere(header + "\n\n" + body.lstrip("\n"))
+        if self.outside:
+            shown = ", ".join(self.outside[:3]) + (", ..." if len(self.outside) > 3 else "")
+            self.warnings.append(
+                f"{len(self.outside)} link(s) climb above the docs folder ({shown}); they are "
+                "left as written and will not resolve"
+            )
+        if self.unresolved:
+            shown = ", ".join(self.unresolved[:4]) + (", ..." if len(self.unresolved) > 4 else "")
+            self.warnings.append(
+                f"{len(self.unresolved)} link(s) match no docs page ({shown}); they point outside "
+                "the docs. Pass --site-url to make them absolute"
+            )
 
         if kwargs.get("validate"):
             self.validation_errors = self.validate_mdx(result)

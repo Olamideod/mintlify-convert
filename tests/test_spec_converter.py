@@ -361,7 +361,7 @@ def test_crlf_input_converts_components(conv):
 
 def test_unicode_preserved(conv):
     out = conv.convert("# Título ñ 日本語\n\nCafé 😀\n")
-    assert "Título ñ 日本語" in out and "Café 😀" in out
+    assert "Título ñ 日本語" in out and "😀" not in out  # text stays, emoji become icons
 
 
 def test_image_framed_even_when_assets_not_copied(conv):

@@ -77,7 +77,7 @@ def test_minimal_config_valid_against_schema(tmp_path):
 
 def test_getting_started_first_then_alphabetical(tmp_path):
     names = [g["group"] for g in groups_of(build(tmp_path))]
-    assert names == ["Getting Started", "Api", "Guides"]
+    assert names == ["Getting Started", "API", "Guides"]
 
 
 def test_sort_pages_honored(tmp_path):
@@ -127,7 +127,7 @@ def test_legacy_mint_json_getting_started_first(tmp_path):
     out = tmp_path / "mint.json"
     generate_enhanced_mint_json(META, out)
     cfg = json.loads(out.read_text())
-    assert [g["group"] for g in cfg["navigation"]] == ["Getting Started", "Api", "Guides"]
+    assert [g["group"] for g in cfg["navigation"]] == ["Getting Started", "API", "Guides"]
 
 
 def test_legacy_mint_json_has_no_null_values(tmp_path):

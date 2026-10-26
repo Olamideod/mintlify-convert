@@ -451,7 +451,7 @@ def test_tab_with_prose_and_fence_is_unwrapped_and_other_tab_fenced():
     "src,expected",
     [
         ("# T\nhello\n", "hello"),
-        ("# T\n`a`\n", "`a`"),
+        ("# T\n`a`\n", "a"),
         ("# T\n[\n", "["),
         ("# T\nSupport\n", "Support"),
         ("# T\n## Sub\ntext\n", "text"),

@@ -33,7 +33,13 @@ mintlify-convert INPUT [OPTIONS]
 
 | Option | Description |
 |--------|-------------|
-| `--download-assets` | Copy image assets to /images directory. Only images inside the input directory are copied. |
+| `--download-assets` | Copy image assets to the `/images` folder. This is the default for a directory; only images inside the input directory or the Docusaurus `static` folder are copied. |
+| `--no-assets` | Leave image paths as written instead of copying the files. |
+| `--static-dir` | Folder that `/img/...` image paths resolve against. |
+| `--site-url` | Base URL of the old site; links to pages outside the docs become absolute. |
+| `--structure` | `diataxis` (default) or `folders` navigation. |
+| `--ia-config` | JSON file that moves pages between sections and renames groups and tabs. |
+| `--explain-ia` | Print the section chosen for each page and why. |
 | `--validate` | Validate MDX output and report errors |
 | `--verbose` | Show detailed error messages |
 

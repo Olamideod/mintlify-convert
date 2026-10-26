@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mintlify-convert"
-version = "2.0.0"
+version = "2.1.0"
 description = "Convert MDX documentation to Mintlify format"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -48,6 +48,9 @@ mintlify-convert = "mintlify_convert.cli:main"
 
 [tool.setuptools]
 packages = ["mintlify_convert"]
+
+[tool.setuptools.package-data]
+mintlify_convert = ["lucide_icons.txt"]
 
 [tool.black]
 line-length = 100

@@ -3,3 +3,4 @@ include LICENSE
 include CHANGELOG.md
 recursive-include tests *.py *.mdx
 global-exclude __pycache__ *.py[cod]
+include mintlify_convert/lucide_icons.txt

@@ -203,6 +203,74 @@ The icon is chosen from the title and text, so it varies. A help card is only re
 [Create User](/api-reference/createUser-v1)
 ```
 
+## Docusaurus Syntax
+
+The tool rewrites these Docusaurus patterns before it applies the rules above.
+
+### Admonitions
+
+````markdown
+:::tip[Use tabs]
+
+Text with `code`.
+
+:::
+````
+
+becomes:
+
+```mdx
+<Tip>
+
+**Use tabs**
+
+Text with `code`.
+
+</Tip>
+```
+
+The types `note`, `tip`, `info`, `warning`, and `danger` map to the callout with the same name. `caution` becomes `<Warning>`, and `success` and `secondary` become `<Check>` and `<Note>`. An unknown type becomes `<Note>` with a warning. An admonition that never closes stays as written.
+
+### Tabs
+
+```mdx
+<Tabs groupId="pm">
+  <TabItem value="npm" label="npm" default>
+
+npm install
+
+  </TabItem>
+</Tabs>
+```
+
+becomes `<Tabs>` with `<Tab title="npm">`. The tool takes the title from `label`, or from the `values` prop on `<Tabs>`, or from `value`. A `default` item or a `defaultValue` prop sets `defaultTabIndex`.
+
+### Details
+
+`<details><summary>Title</summary>` becomes `<Accordion title="Title">`, and `<details open>` adds `defaultOpen`.
+
+### Code blocks
+
+| Input | Output |
+| --- | --- |
+| `showLineNumbers` | `lines` |
+| `{1,3-5}` | `highlight={1,3-5}` |
+| `// highlight-next-line` | Comment removed, next line highlighted |
+| `// highlight-start` and `// highlight-end` | Comments removed, lines between them highlighted |
+| `title="a.js"` | Kept |
+
+The magic comments also work with `#`, `/* */`, `{/* */}`, and `<!-- -->`.
+
+### Imports, comments, and heading ids
+
+- `import` lines are removed, except imports from `/snippets/`.
+- `<!-- text -->` becomes `{/* text */}`.
+- `## Title {#id}` and `## Title {/* #id */}` become `## Title`.
+
+### Frontmatter
+
+`sidebar_label` becomes `sidebarTitle`. These keys are dropped: `id`, `slug`, `sidebar_position`, `sidebar_class_name`, `pagination_*`, `hide_*`, `toc_*`, `displayed_sidebar`, `tags`, `image`, and `draft`. `sidebar_position` still sets the page order in `docs.json`.
+
 ## Relative Links
 
 Relative links to `.md` and `.mdx` files are rewritten to root-relative paths without the extension, for example `[Other](other.mdx)` becomes `[Other](/other)`. A relative link that resolves outside the input directory (for example `../examples/`) is left unchanged.
@@ -227,7 +295,7 @@ Relative links to `.md` and `.mdx` files are rewritten to root-relative paths wi
 
 Image rules:
 
-- Images are copied only when `--download-assets` is set. Without it, image links are left as written.
+- Images are copied when you convert a directory. With `--no-assets` (or when converting one file without `--download-assets`), image links are left as written.
 - The source image must be inside the input directory. Absolute paths, `file:` and `data:` URLs and `//` URLs are not copied.
 - Only common image file types are copied. Symlinks are skipped.
 - An image with a `file:` source is not copied, and a warning is printed to stderr.

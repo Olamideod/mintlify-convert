@@ -3,12 +3,23 @@
 Utility functions for Mintlify Convert.
 """
 
+import json
 import os
+import re
 import sys
 from pathlib import Path
-from typing import Dict, Tuple, Optional
+from typing import Dict, List, Tuple, Optional
 
-from .converter import MAX_INPUT_BYTES, MintlifyConverter
+from . import docusaurus, ia
+from .converter import (
+    MAX_INPUT_BYTES,
+    MintlifyConverter,
+    SiteIndex,
+    _fm_get,
+    _normalize,
+    _split_frontmatter,
+    sanitize_page_key,
+)
 
 
 def check_paths(input_path: Path, output_path: Optional[Path]) -> Optional[str]:
@@ -95,7 +106,8 @@ def process_file(
         else:
             print(converted)
 
-        return True, converter.extract_title(content)
+        written = _fm_get(_split_frontmatter(converted)[0] or [], "title")
+        return True, written or converter.extract_title(content)
     except Exception as e:
         print(f"\u2717 Error processing {input_path}: {str(e)}", file=sys.stderr)
         if kwargs.get("verbose"):
@@ -105,16 +117,191 @@ def process_file(
         return False, None
 
 
+class SiteMetadata(dict):
+    """Page metadata for navigation, plus what else the scan learned about the site."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.redirects: List[Dict] = []
+        self.categories: Dict[str, Dict] = {}
+        self.snippets: int = 0
+        self.converted: int = 0  # pages and snippets written
+
+
+def is_partial(relative_path: Path) -> bool:
+    """Docusaurus ignores files and folders whose name starts with an underscore."""
+    parts = relative_path.parts
+    # A top-level snippets/ folder is what a previous conversion wrote.
+    return any(part.startswith("_") for part in parts) or (
+        len(parts) > 1 and parts[0] == "snippets"
+    )
+
+
+def snippet_path(relative_path: Path) -> str:
+    """Where a partial lives in the output: _dir/_part.mdx -> snippets/dir/part.mdx."""
+    parts = [part.lstrip("_") or part for part in relative_path.with_suffix("").parts]
+    if parts[0] == "snippets":
+        parts = parts[1:]
+    return "snippets/" + "/".join(sanitize_page_key(p) for p in parts) + ".mdx"
+
+
+def detect_static_dir(input_dir: Path, explicit=None) -> Optional[Path]:
+    """The Docusaurus static folder: --static-dir, else ../static or ./static if present."""
+    if explicit:
+        return Path(explicit)
+    for candidate in (input_dir.parent / "static", input_dir / "static"):
+        if candidate.is_dir() and not candidate.is_symlink():
+            return candidate
+    return None
+
+
+def _read_category(path: Path) -> Dict:
+    """label/position/description from a Docusaurus _category_.yml or _category_.json."""
+    try:
+        text = path.read_text(encoding="utf-8")
+        if path.suffix == ".json":
+            data = json.loads(text)
+            return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+    info: Dict = {}
+    for line in text.splitlines():
+        m = re.match(r"^(label|position|description)\s*:\s*(.*?)\s*(?:#.*)?$", line)
+        if m:
+            value = m.group(2).strip("\"'")
+            if m.group(1) == "position":
+                try:
+                    info["position"] = float(value)
+                except ValueError:
+                    pass  # not a number: the folder keeps its alphabetical place
+            else:
+                info[m.group(1)] = value
+    return info
+
+
+def build_site_index(
+    input_dir: Path, mdx_files: List[Path], route_prefix=None
+) -> Tuple[SiteIndex, Dict]:
+    """First pass over the docs: routes, renamed pages, heading anchors, partials and
+    categories, so the second pass can rewrite links between pages."""
+    index = SiteIndex()
+    if route_prefix is None:
+        route_prefix = "/docs" if input_dir.name == "docs" else ""
+    if route_prefix:
+        index.prefixes.append("/" + route_prefix.strip("/"))
+    categories: Dict[str, Dict] = {}
+    helper = MintlifyConverter()
+
+    # Pages that keep their name claim it first; a renamed page that would land on a taken
+    # name gets a numeric suffix instead of silently overwriting the other page.
+    keys = [
+        p.relative_to(input_dir).with_suffix("").as_posix()
+        for p in mdx_files
+        if not is_partial(p.relative_to(input_dir))
+    ]
+    # Names are compared case-insensitively: on macOS and Windows Case.md and case.md are one file.
+    taken = set()
+    for key in keys:
+        if sanitize_page_key(key) == key and key.lower() not in taken:
+            taken.add(key.lower())
+    claimed = set()
+    for key in keys:
+        out_key = sanitize_page_key(key)
+        if out_key == key and key.lower() in taken and key not in claimed:
+            claimed.add(key)
+            continue
+        unique, n = out_key, 2
+        while unique.lower() in taken:
+            unique, n = f"{out_key}-{n}", n + 1
+        taken.add(unique.lower())
+        index.rename[key] = unique
+
+    partial_anchors: Dict[Path, Dict[str, str]] = {}
+    hosts: List[Tuple[str, Path, str]] = []
+    for path in mdx_files:
+        rel = path.relative_to(input_dir)
+        if is_partial(rel):
+            index.snippets[path.resolve()] = "/" + snippet_path(rel)
+            try:
+                _, pbody = _split_frontmatter(_normalize(path.read_text(encoding="utf-8")))
+                partial_anchors[path.resolve()] = docusaurus.heading_anchors(pbody)
+            except (OSError, UnicodeDecodeError):
+                pass
+            continue
+        try:
+            text = _normalize(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError):
+            continue
+        key = rel.with_suffix("").as_posix()
+        out_key = index.rename.get(key, key)
+        fm, body = _split_frontmatter(text)
+        fm = fm or []
+        parent = key.rsplit("/", 1)[0] if "/" in key else ""
+        leaf = key.rsplit("/", 1)[-1]
+
+        routes = ["/" + key]
+        if leaf.lower() in ("index", "readme"):
+            routes.append("/" + parent if parent else "/")
+        slug = _fm_get(fm, "slug")
+        if slug:
+            routes.append(
+                slug.rstrip("/") or "/"
+                if slug.startswith("/")
+                else f"/{parent}/{slug}".replace("//", "/")
+            )
+        doc_id = _fm_get(fm, "id")
+        if doc_id:
+            routes.append(f"/{parent}/{doc_id}".replace("//", "/"))
+        for route in routes:
+            owner = index.routes.setdefault(route, out_key)
+            if owner != out_key:
+                print(
+                    f"Warning: {rel.as_posix()} and {owner} both claim the route {route}; "
+                    f"links to it go to {owner}",
+                    file=sys.stderr,
+                )
+
+        anchors = docusaurus.heading_anchors(body)
+        if anchors:
+            index.anchors[out_key] = anchors
+        hosts.append((out_key, path, body))
+        position = _sidebar_position(path)
+        index.pages[out_key] = {
+            "title": helper.extract_title(text),
+            "description": helper.extract_description(text),
+            "position": position,
+            "signals": ia.analyze(body),
+            "source": rel.as_posix(),
+        }
+
+    # A page that imports a partial also owns the partial's headings.
+    for out_key, path, body in hosts:
+        for mod in re.findall(r"""^import\s+[^'"\n]+from\s+['"](\.[^'"\n]+)['"]""", body, re.M):
+            target = Path(os.path.normpath(path.resolve().parent / mod))
+            if target in partial_anchors and partial_anchors[target]:
+                index.anchors.setdefault(out_key, {}).update(partial_anchors[target])
+
+    for root, dirs, files in os.walk(input_dir, followlinks=False):
+        dirs.sort()
+        for name in files:
+            if name in ("_category_.yml", "_category_.yaml", "_category_.json"):
+                info = _read_category(Path(root) / name)
+                if info:
+                    folder = Path(root).relative_to(input_dir).as_posix()
+                    categories[sanitize_page_key(folder) if folder != "." else ""] = info
+    return index, categories
+
+
 def process_directory(input_dir: Path, output_dir: Path, **kwargs) -> Dict:
     """Process all MDX files in a directory.
 
     Args:
         input_dir: Input directory containing MDX files
         output_dir: Output directory for converted files
-        **kwargs: Additional conversion options
+        **kwargs: Additional conversion options (static_dir, route_prefix, ...)
 
     Returns:
-        Dictionary of file metadata for navigation generation
+        SiteMetadata (a dict of file metadata for navigation generation)
 
     Raises:
         ValueError: if the output directory equals or nests with the input directory
@@ -131,45 +318,91 @@ def process_directory(input_dir: Path, output_dir: Path, **kwargs) -> Dict:
 
     if not mdx_files:
         print(f"No MDX/MD files found in {input_dir}")
-        return {}
+        return SiteMetadata()
 
     print(f"Found {len(mdx_files)} files to convert...")
 
+    index, categories = build_site_index(input_dir, mdx_files, kwargs.get("route_prefix"))
     converter = MintlifyConverter(
-        output_dir, download_assets=bool(kwargs.get("download_assets")), input_root=input_dir
+        output_dir,
+        download_assets=bool(kwargs.get("download_assets")),
+        input_root=input_dir,
+        static_dir=detect_static_dir(input_dir, kwargs.get("static_dir")),
+        index=index,
+        site_url=kwargs.get("site_url"),
     )
     success_count = 0
-    file_metadata = {}
+    file_metadata = SiteMetadata()
+    file_metadata.categories = categories
 
     for mdx_file in mdx_files:
         relative_path = mdx_file.relative_to(input_dir)
-        output_path = output_dir / relative_path
+        partial = is_partial(relative_path)
+        key = relative_path.with_suffix("").as_posix()
+        out_key = index.rename.get(key, key)
+        if partial:
+            output_path = output_dir / snippet_path(relative_path)
+        else:
+            output_path = output_dir / (out_key + relative_path.suffix)
 
-        success, title = process_file(mdx_file, output_path, converter, **kwargs)
-        if success:
-            success_count += 1
-            key = relative_path.with_suffix("").as_posix()
-            if key in file_metadata:
-                print(
-                    f"Warning: {relative_path} collides with another page at '{key}'",
-                    file=sys.stderr,
-                )
-            file_metadata[key] = {
-                "title": title,
-                "path": key,
-                "group": (
-                    relative_path.parent.as_posix()
-                    if relative_path.parent != Path(".")
-                    else "Documentation"
-                ),
-            }
+        success, title = process_file(
+            mdx_file,
+            output_path,
+            converter,
+            **{
+                **kwargs,
+                "partial": partial,
+                "page_key": None if partial else out_key,
+                "source_rel": relative_path.as_posix(),
+            },
+        )
+        if not success:
+            continue
+        success_count += 1
+        file_metadata.converted += 1
+        if partial:
+            file_metadata.snippets += 1
+            continue
+        if out_key in file_metadata:
+            print(
+                f"Warning: {relative_path} collides with another page at '{out_key}'",
+                file=sys.stderr,
+            )
+        info = index.pages.get(out_key, {})
+        file_metadata[out_key] = {
+            "title": title,
+            "path": out_key,
+            "position": _sidebar_position(mdx_file),
+            "description": info.get("description", ""),
+            "signals": info.get("signals", {}),
+            "group": (
+                relative_path.parent.as_posix()
+                if relative_path.parent != Path(".")
+                else "Documentation"
+            ),
+        }
+        if out_key != key:
+            file_metadata.redirects.append({"source": "/" + key, "destination": "/" + out_key})
+            print(f"  renamed page: {key} -> {out_key} (redirect added)")
 
     print(f"\n\u2713 Successfully converted {success_count}/{len(mdx_files)} files")
+    if file_metadata.snippets:
+        print(f"\u2713 Wrote {file_metadata.snippets} partial(s) to /snippets")
 
     if converter.assets_copied:
         print(f"\u2713 Copied {len(converter.assets_copied)} assets to /images")
 
     return file_metadata
+
+
+def _sidebar_position(path: Path) -> Optional[float]:
+    """Docusaurus sidebar_position from the source frontmatter, if it is a number."""
+    try:
+        fm, _ = _split_frontmatter(_normalize(path.read_text(encoding="utf-8")))
+        raw = _fm_get(fm, "sidebar_position") if fm is not None else None
+        return float(raw) if raw is not None else None
+    except (OSError, ValueError):
+        return None
 
 
 def find_mdx_files(directory: Path, skipped: Optional[list] = None) -> list[Path]:
@@ -184,7 +417,7 @@ def find_mdx_files(directory: Path, skipped: Optional[list] = None) -> list[Path
     """
     found = []
     for root, dirs, files in os.walk(directory, followlinks=False):
-        dirs.sort()
+        dirs[:] = sorted(d for d in dirs if not d.startswith(".") and d != "node_modules")
         if skipped is not None:
             skipped.extend(Path(root) / d for d in dirs if (Path(root) / d).is_symlink())
         for name in sorted(files):

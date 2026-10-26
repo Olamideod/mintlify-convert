@@ -177,7 +177,7 @@ class TestNavigationGrouping:
 
         # Check that group names are properly formatted
         groups = [nav["group"] for nav in config["navigation"]]
-        assert "Api Reference" in groups
+        assert "API Reference" in groups
         assert "Getting Started" in groups
 
     def test_documentation_group_priority(self, tmp_path):
@@ -199,3 +199,34 @@ class TestNavigationGrouping:
 
         # Documentation group should come first
         assert config["navigation"][0]["group"] == "Documentation"
+
+
+class TestNestedGroups:
+    def meta(self):
+        return {
+            "guides/docs/create": {"title": "Create", "path": "guides/docs/create", "group": "guides/docs", "position": 2},
+            "guides/docs/intro": {"title": "Intro", "path": "guides/docs/intro", "group": "guides/docs", "position": 1},
+            "guides/docs/sidebar/auto": {"title": "Auto", "path": "guides/docs/sidebar/auto", "group": "guides/docs/sidebar"},
+            "guides/overview": {"title": "Overview", "path": "guides/overview", "group": "guides"},
+        }  # fmt: skip
+
+    def test_folders_nest_instead_of_flattening(self):
+        from mintlify_convert.navigation import _build_groups
+
+        (guides,) = _build_groups(self.meta())
+        assert guides["group"] == "Guides"
+        assert guides["pages"][0] == "guides/overview"
+        docs = guides["pages"][1]
+        assert docs["group"] == "Docs"
+        assert docs["pages"][:2] == ["guides/docs/intro", "guides/docs/create"]
+        assert docs["pages"][2] == {"group": "Sidebar", "pages": ["guides/docs/sidebar/auto"]}
+
+    def test_no_slash_in_any_group_name(self):
+        from mintlify_convert.navigation import _build_groups
+
+        def names(groups):
+            for g in groups:
+                yield g["group"]
+                yield from names([p for p in g["pages"] if isinstance(p, dict)])
+
+        assert not any("/" in n for n in names(_build_groups(self.meta())))

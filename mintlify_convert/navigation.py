@@ -6,7 +6,10 @@ Navigation, docs.json and mint.json generation for Mintlify Convert.
 import json
 import re
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
+
+from . import ia
+from .icons import ICON_LIBRARY, strip_emoji_json
 
 DOCS_JSON_SCHEMA_URL = "https://mintlify.com/docs.json"
 DEFAULT_PRIMARY_COLOR = "#0D9373"
@@ -35,7 +38,7 @@ def _clean_path(raw) -> Optional[str]:
 def _group_title(name) -> str:
     if not isinstance(name, str) or not name.strip():
         return "Documentation"
-    return name.replace("-", " ").replace("_", " ").strip().title()
+    return ia.humanize(name, title_case=True)
 
 
 def _page_title(meta: Dict, path: str) -> str:
@@ -50,9 +53,35 @@ def _group_sort_key(title: str):
     return (title != FIRST_GROUP, title != "Documentation", title.casefold(), title)
 
 
+def _position(meta: Dict) -> float:
+    pos = meta.get("position")
+    return pos if isinstance(pos, (int, float)) and not isinstance(pos, bool) else float("inf")
+
+
+def _group_node() -> Dict:
+    return {"pages": [], "children": {}}
+
+
+def _node_to_group(title: str, node: Dict, sort_pages: bool) -> Dict:
+    """Pages first (by position, then title or path), then subgroups A-Z."""
+    if sort_pages:
+        key = lambda e: (_position(e[2]), e[0].casefold(), e[1])  # noqa: E731
+    else:
+        key = lambda e: (_position(e[2]), e[1])  # noqa: E731
+    pages: List = [path for _, path, _ in sorted(node["pages"], key=key)]
+    children = node["children"]
+    for name in sorted(children, key=lambda t: (t.casefold(), t)):
+        pages.append(_node_to_group(name, children[name], sort_pages))
+    return {"group": title, "pages": pages}
+
+
 def _build_groups(file_metadata: Optional[Dict], sort_pages: bool = False) -> List[Dict]:
-    """Return [{'group': title, 'pages': [path, ...]}] in navigation order."""
-    groups: Dict[str, List[Tuple[str, str]]] = {}
+    """Return [{'group': title, 'pages': [path | subgroup, ...]}] in navigation order.
+
+    A page whose group is a folder path such as "guides/docs" lands in a subgroup "Docs"
+    nested inside "Guides", the way Mintlify nests navigation.
+    """
+    roots: Dict[str, Dict] = {}
     seen = set()
 
     for key, meta in sorted((file_metadata or {}).items(), key=lambda kv: str(kv[0])):
@@ -62,16 +91,23 @@ def _build_groups(file_metadata: Optional[Dict], sort_pages: bool = False) -> Li
         if path is None or path in seen:
             continue
         seen.add(path)
-        title = _group_title(meta.get("group"))
-        groups.setdefault(title, []).append((_page_title(meta, path), path))
+        raw = meta.get("group")
+        segments = [seg for seg in str(raw).replace("\\", "/").split("/") if seg.strip()]
+        if not isinstance(raw, str) or not segments:
+            segments = [None]  # type: ignore[list-item]
+        node = None
+        children = roots
+        for seg in segments:
+            title = _group_title(seg)
+            node = children.setdefault(title, _group_node())
+            children = node["children"]
+        assert node is not None
+        node["pages"].append((_page_title(meta, path), path, meta))
 
-    result = []
-    for title in sorted(groups, key=_group_sort_key):
-        pages = groups[title]
-        if sort_pages:
-            pages = sorted(pages, key=lambda tp: (tp[0].casefold(), tp[1]))
-        result.append({"group": title, "pages": [path for _, path in pages]})
-    return result
+    return [
+        _node_to_group(title, roots[title], sort_pages)
+        for title in sorted(roots, key=_group_sort_key)
+    ]
 
 
 def _valid_url(value, schemes=_SOCIAL_SCHEMES) -> Optional[str]:
@@ -93,7 +129,7 @@ def _write_json(config: Dict, output_path) -> None:
     if path.is_symlink():
         raise ValueError(f"Refusing to write through symlink: {path}")
     with open(path, "w", encoding="utf-8") as f:
-        json.dump(config, f, indent=2)
+        json.dump(strip_emoji_json(config), f, indent=2, ensure_ascii=False)
         f.write("\n")
 
 
@@ -110,28 +146,45 @@ def generate_docs_json(
     github: Optional[str] = None,
     linkedin: Optional[str] = None,
     sort_pages: bool = False,
+    structure: str = "folders",
+    ia_config: Optional[Dict] = None,
+    categories: Optional[Dict[str, Dict]] = None,
+    redirects: Optional[List[Dict]] = None,
     **_ignored,
 ):
-    """Write a minimal docs.json (theme "mint") valid against the Mintlify schema.
+    """Write a docs.json (theme "mint") valid against the Mintlify schema.
 
+    ``structure`` is "folders" (navigation groups follow the source folders) or "diataxis"
+    (a Documentation tab sorted into Diataxis groups, and a separate API reference tab).
     Keys whose values are unset are omitted; nothing is filled with placeholders.
-    Raises ValueError for malformed colors.
+    Raises ValueError for malformed colors or an unknown structure.
     """
+    if structure not in ("folders", "diataxis"):
+        raise ValueError(f"structure must be 'folders' or 'diataxis', got {structure!r}")
     colors = {"primary": _check_color(primary_color, "primary_color") or DEFAULT_PRIMARY_COLOR}
     for key, value in (("light", light_color), ("dark", dark_color)):
         checked = _check_color(value, f"{key}_color")
         if checked:
             colors[key] = checked
 
-    groups = _build_groups(file_metadata, sort_pages)
+    if structure == "diataxis" and file_metadata:
+        navigation = ia.build_diataxis_navigation(file_metadata, sort_pages, ia_config, categories)
+    else:
+        groups = _build_groups(file_metadata, sort_pages)
+        # The schema rejects an empty "groups" array but accepts an empty "pages" one.
+        navigation = {"groups": groups} if groups else {"pages": []}
     config: Dict = {
         "$schema": DOCS_JSON_SCHEMA_URL,
         "theme": "mint",
         "name": (project_name or "").strip() or "Documentation",
         "colors": colors,
-        # The schema rejects an empty "groups" array but accepts an empty "pages" one.
-        "navigation": {"groups": groups} if groups else {"pages": []},
+        "icons": {"library": ICON_LIBRARY},
+        "navigation": navigation,
     }
+    if structure == "diataxis":
+        config["contextual"] = {"options": ["copy", "view", "chatgpt", "claude"]}
+    if redirects:
+        config["redirects"] = redirects
 
     links = []
     support = _valid_url(support_url, _SOCIAL_SCHEMES + ("mailto:",))

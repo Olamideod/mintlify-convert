@@ -179,3 +179,41 @@ class TestFrontmatterGeneration:
 
         assert "# Original Title" not in result
         assert "Content here" in result
+
+
+def test_emoji_become_lucide_icons_outside_headings_and_code():
+    from mintlify_convert.icons import convert_emoji_line
+
+    assert convert_emoji_line("⚡️ Fast **site**") == '<Icon icon="zap" /> Fast **site**'
+    assert convert_emoji_line("## Fast Track ⏱️") == "## Fast Track"
+    assert convert_emoji_line('<Tab title="🍎 Apple">') == '<Tab title="Apple">'
+    assert convert_emoji_line('<Icon icon="💡" />') == '<Icon icon="💡" />'
+    assert "→" in convert_emoji_line("a → b")
+
+
+def test_convert_emoji_skips_code_and_warns_on_unknown():
+    from mintlify_convert.converter import MintlifyConverter
+
+    c = MintlifyConverter()
+    out = c.convert("# T\n\n🔌 Pluggable `⚡` and 🦄\n\n```\n⚡ code\n```\n")
+    assert '<Icon icon="plug" />' in out
+    assert "⚡" not in out  # emoji are removed from code too
+    assert any("🦄" in w for w in c.warnings)
+
+
+def test_no_emoji_survives_anywhere(tmp_path):
+    import json
+    import re
+
+    from mintlify_convert.converter import MintlifyConverter
+    from mintlify_convert.icons import _emoji_re, strip_emoji_json
+
+    src = (
+        '---\ntitle: "🚀 Launch"\n---\n\n# Launch\n\n🥇 First **place**\n\n'
+        '<Card\n  title="💡 Tip"\n>\n  body\n</Card>\n\n```md\n| a | ✅ |\n```\n\nInline `⚡` code.\n'
+    )
+    out = MintlifyConverter().convert(src)
+    assert not _emoji_re().search(re.sub(r"<Icon [^>]*>", "", out)), out
+    cfg = strip_emoji_json({"navigation": {"groups": [{"group": "🚀 Start", "pages": ["a"]}]}})
+    assert cfg["navigation"]["groups"][0]["group"] == "Start"
+    assert not _emoji_re().search(json.dumps(cfg, ensure_ascii=False))

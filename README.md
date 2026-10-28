@@ -241,10 +241,10 @@ pip install -e ".[dev]"
 pytest tests/ -v --cov=mintlify_convert
 ```
 
-The project uses black, flake8, and mypy for code quality:
+The project uses black, flake8, and mypy for code quality. CI runs the tests on Python 3.10 to 3.13 and fails the build if `black --check` or flake8 report a problem, so run them before you push:
 
 ```bash
-black mintlify_convert/
+black mintlify_convert/ tests/
 flake8 mintlify_convert/
 mypy mintlify_convert/
 ```

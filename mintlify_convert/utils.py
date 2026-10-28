@@ -207,8 +207,8 @@ def build_site_index(
     claimed = set()
     for key in keys:
         out_key = sanitize_page_key(key)
-        if out_key == key and key.lower() in taken and key not in claimed:
-            claimed.add(key)
+        if out_key == key and key.lower() in taken and key.lower() not in claimed:
+            claimed.add(key.lower())
             continue
         unique, n = out_key, 2
         while unique.lower() in taken:

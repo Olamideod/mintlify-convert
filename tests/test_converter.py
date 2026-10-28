@@ -217,3 +217,14 @@ def test_no_emoji_survives_anywhere(tmp_path):
     cfg = strip_emoji_json({"navigation": {"groups": [{"group": "🚀 Start", "pages": ["a"]}]}})
     assert cfg["navigation"]["groups"][0]["group"] == "Start"
     assert not _emoji_re().search(json.dumps(cfg, ensure_ascii=False))
+
+
+def test_blank_lines_left_by_removed_components_are_stable():
+    converter = MintlifyConverter()
+    source = (
+        "# Title\n\nIntro text.\n\n"
+        "<BrowserWindow>\n\nInside.\n\n</BrowserWindow>\n  \n\n\n## Next\n\nBody text.\n"
+    )
+    once = converter.convert(source)
+    assert "\n\n\n" not in once
+    assert converter.convert(once) == once

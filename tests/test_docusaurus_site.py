@@ -574,6 +574,14 @@ def test_case_colliding_files_are_kept_apart(tmp_path):
     assert len(names) == len(set(names)) == 2
 
 
+def test_case_colliding_names_get_distinct_keys_on_any_filesystem():
+    from mintlify_convert.utils import build_site_index
+
+    root = Path("/nonexistent/docs")
+    index, _ = build_site_index(root, [root / "Case.md", root / "case.md"])
+    assert index.rename == {"case": "case-2"}
+
+
 def test_duplicate_slug_warns(tmp_path, capsys):
     docs = tmp_path / "docs"
     write(docs / "a.md", "---\nslug: /dup\n---\n\n# A\n\nBody text.\n")

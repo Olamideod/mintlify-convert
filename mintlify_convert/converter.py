@@ -353,6 +353,29 @@ def _normalize(text: str) -> str:
     return text.replace(_TOKEN_OPEN, "").replace(_TOKEN_CLOSE, "")
 
 
+def _tidy_blank_lines(text: str) -> str:
+    """Collapse runs of blank or whitespace-only lines to one blank line, outside code fences.
+
+    Removing a component leaves its neighbours' blank lines behind; without this a second
+    conversion pass would collapse them and the output would not be stable.
+    """
+    out: List[str] = []
+    fence = ""
+    for line in text.split("\n"):
+        marker = re.match(r"^\s*(`{3,}|~{3,})", line)
+        if marker:
+            if not fence:
+                fence = marker.group(1)[0]
+            elif marker.group(1)[0] == fence:
+                fence = ""
+        elif not fence and not line.strip():
+            if out and not out[-1].strip():
+                continue
+            line = ""
+        out.append(line)
+    return "\n".join(out)
+
+
 def _attr(value: str) -> str:
     return value.replace('"', "&quot;")
 
@@ -886,7 +909,8 @@ class MintlifyConverter:
             )
         else:
             attrs = attrs.rstrip() + f' alt="{_attr(alt)}"'
-        return f"<img{re.sub(r'[ \t]*\n[ \t]*', ' ', attrs).rstrip()} />"
+        attrs = re.sub(r"[ \t]*\n[ \t]*", " ", attrs).rstrip()
+        return f"<img{attrs} />"
 
     def _wrap_image_in_frame(
         self, alt: str, src: str, caption: str = "", attrs: Optional[str] = None
@@ -1647,6 +1671,7 @@ class MintlifyConverter:
                 body = step(body)
             # Mintlify snippet variables are used bare: {name}, not {props.name}.
             body = re.sub(r"\{props\.(\w+)\}", r"{\1}", body)
+            body = _tidy_blank_lines(body)
             return strip_emoji_everywhere(body.strip("\n") + "\n")
         existing = fm_lines or []
         fm_title = _fm_get(existing, "title")
@@ -1696,6 +1721,7 @@ class MintlifyConverter:
             new_other = [ln for ln in new if not ln.startswith("title:")]
             header = "\n".join(["---", *new_title, *lead, *new_other, *rest, *tail, "---"])
 
+        body = _tidy_blank_lines(body)
         result = strip_emoji_everywhere(header + "\n\n" + body.lstrip("\n"))
         if self.outside:
             shown = ", ".join(self.outside[:3]) + (", ..." if len(self.outside) > 3 else "")

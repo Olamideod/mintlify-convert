@@ -33,6 +33,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Project restructure into a package, test suite with fixtures, examples, CI workflows and pre-commit configuration
 
 ### Fixed
+- The package no longer fails to import on Python 3.10 and 3.11 (a backslash inside an f-string expression is a syntax error before 3.12)
+- Files whose names differ only by case, such as `Case.md` and `case.md`, are now kept apart on case-sensitive file systems; before, both claimed the same output name
+- Converting the tool's own output is now stable: blank lines left where a component was removed collapse to one, so a second pass changes nothing
 - Review round: unknown components keep nested content; themed images inside lists stay in their step; YAML block scalars and empty titles; crashes on bad `_category_.yml` / `--ia-config`; case-colliding file names; duplicate-slug warnings; hidden folders skipped; links with parentheses, spaces, percent-encoding or an image label; Docusaurus-hook exports and `require()` links; npm2yarn for `-g` and `&&` chains; lists of questions stay plain lists
 
 ### Changed
